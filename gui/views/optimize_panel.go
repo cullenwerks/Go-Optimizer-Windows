@@ -70,24 +70,6 @@ func NewOptimizePanel() fyne.CanvasObject {
 	})
 	networkBtn.Importance = widget.HighImportance
 
-	// Registry optimization
-	registryBtn := widget.NewButton("Optimize Registry", func() {
-		progressBar.Show()
-		progressBar.Start()
-		statusLabel.SetText("Optimizing registry...")
-
-		go func() {
-			result := optimizer.OptimizeRegistry()
-			progressBar.Stop()
-			progressBar.Hide()
-			statusLabel.SetText("Registry optimization complete.")
-
-			resultText.SetText(fmt.Sprintf("Registry Optimization:\n  Entries cleaned: %d\n  Backup: %s",
-				result.EntriesRemoved, result.BackupPath))
-		}()
-	})
-	registryBtn.Importance = widget.HighImportance
-
 	// Disk optimization
 	diskBtn := widget.NewButton("Optimize Disk", func() {
 		progressBar.Show()
@@ -135,10 +117,6 @@ func NewOptimizePanel() fyne.CanvasObject {
 			text += fmt.Sprintf("Network: %dms latency reduction, %d optimizations\n",
 				netResult.LatencyReduction, len(netResult.Optimizations))
 
-			// Registry
-			regResult := optimizer.OptimizeRegistry()
-			text += fmt.Sprintf("Registry: %d entries cleaned\n", regResult.EntriesRemoved)
-
 			// Disk
 			diskResult := optimizer.OptimizeDisk()
 			diskType := "HDD"
@@ -155,10 +133,9 @@ func NewOptimizePanel() fyne.CanvasObject {
 	})
 	allBtn.Importance = widget.WarningImportance
 
-	buttonGrid := container.NewGridWithColumns(2,
+	buttonGrid := container.NewGridWithColumns(3,
 		startupBtn,
 		networkBtn,
-		registryBtn,
 		diskBtn,
 	)
 

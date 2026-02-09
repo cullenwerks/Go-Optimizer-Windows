@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -45,13 +46,6 @@ type CleanOptions struct {
 	VSCodeCache   bool
 	JavaCache     bool
 
-	// Legacy flags (for backwards compatibility)
-	TempFiles  bool
-	Browser    bool
-	Registry   bool
-	Logs       bool
-	Thumbnails bool
-
 	// Execution options
 	DryRun   bool
 	Progress ProgressFunc
@@ -60,13 +54,58 @@ type CleanOptions struct {
 // ProgressFunc is called to report progress during cleaning
 type ProgressFunc func(category string, current, total int64)
 
+// ErrorType categorizes cleaning errors for better user feedback
+type ErrorType int
+
+const (
+	ErrorLocked           ErrorType = iota // File in use
+	ErrorPermissionDenied                  // Access denied
+	ErrorTimeout                           // Operation timed out
+	ErrorNotFound                          // File not found
+	ErrorOther                             // Other errors
+)
+
+// CleanError is a categorized error for cleaning operations
+type CleanError struct {
+	Path string
+	Type ErrorType
+	Err  error
+}
+
+func (e *CleanError) Error() string {
+	return fmt.Sprintf("%s: %v", e.Path, e.Err)
+}
+
+// classifyError categorizes an OS error into a CleanError type
+func classifyError(path string, err error) *CleanError {
+	ce := &CleanError{Path: path, Err: err}
+	errMsg := strings.ToLower(err.Error())
+	switch {
+	case os.IsPermission(err):
+		ce.Type = ErrorPermissionDenied
+	case os.IsNotExist(err):
+		ce.Type = ErrorNotFound
+	case strings.Contains(errMsg, "used by another process") ||
+		strings.Contains(errMsg, "locked") ||
+		strings.Contains(errMsg, "sharing violation"):
+		ce.Type = ErrorLocked
+	case strings.Contains(errMsg, "timeout"):
+		ce.Type = ErrorTimeout
+	default:
+		ce.Type = ErrorOther
+	}
+	return ce
+}
+
 // CleanResult holds the result of a cleaning operation
 type CleanResult struct {
-	FilesDeleted int64
-	SkippedFiles int64
-	SpaceFreed   int64
-	Duration     time.Duration
-	Errors       []error
+	FilesDeleted    int64
+	SkippedFiles    int64
+	SpaceFreed      int64
+	LockedFiles     int64
+	PermissionFiles int64
+	Duration        time.Duration
+	Errors          []error
 }
 
 const (
@@ -75,7 +114,18 @@ const (
 	defaultOpTimeout = 5 * time.Minute  // Overall operation timeout
 )
 
-// PerformClean orchestrates all cleaning operations based on options
+// cleanTask represents a single cleaning category to execute
+type cleanTask struct {
+	name string
+	fn   func(CleanOptions) CleanResult
+}
+
+// maxCleanWorkers is the number of concurrent cleaning goroutines.
+// Limited to 4 to avoid excessive disk I/O contention on spinning drives.
+const maxCleanWorkers = 4
+
+// PerformClean orchestrates all cleaning operations based on options.
+// Independent categories run concurrently via a worker pool for faster execution.
 func PerformClean(opts CleanOptions) CleanResult {
 	start := time.Now()
 	result := CleanResult{}
@@ -83,118 +133,128 @@ func PerformClean(opts CleanOptions) CleanResult {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 
-	// Map legacy flags to new granular flags
-	if opts.TempFiles {
-		opts.WindowsTemp = true
-		opts.UserTemp = true
-		opts.WindowsUpdate = true
-		opts.WindowsInstaller = true
-		opts.CrashDumps = true
-		opts.ErrorReports = true
-	}
-	if opts.Browser {
-		opts.ChromeCache = true
-		opts.FirefoxCache = true
-		opts.EdgeCache = true
-		opts.BraveCache = true
-		opts.OperaCache = true
-	}
-	if opts.Thumbnails {
-		opts.ThumbnailCache = true
-		opts.IconCache = true
-	}
-	if opts.Logs {
-		opts.WindowsLogs = true
-	}
-
-	// System categories
+	// Build list of enabled categories
+	var tasks []cleanTask
 	if opts.WindowsTemp {
-		result.merge(cleanCategory(ctx, "Windows Temp", cleanWindowsTemp, opts))
+		tasks = append(tasks, cleanTask{"Windows Temp", cleanWindowsTemp})
 	}
 	if opts.UserTemp {
-		result.merge(cleanCategory(ctx, "User Temp", cleanUserTemp, opts))
+		tasks = append(tasks, cleanTask{"User Temp", cleanUserTemp})
 	}
 	if opts.WindowsUpdate {
-		result.merge(cleanCategory(ctx, "Windows Update Cache", cleanWindowsUpdate, opts))
+		tasks = append(tasks, cleanTask{"Windows Update Cache", cleanWindowsUpdate})
 	}
 	if opts.WindowsInstaller {
-		result.merge(cleanCategory(ctx, "Windows Installer Cache", cleanWindowsInstaller, opts))
+		tasks = append(tasks, cleanTask{"Windows Installer Cache", cleanWindowsInstaller})
 	}
 	if opts.Prefetch {
-		result.merge(cleanCategory(ctx, "Prefetch", cleanPrefetch, opts))
+		tasks = append(tasks, cleanTask{"Prefetch", cleanPrefetch})
 	}
 	if opts.CrashDumps {
-		result.merge(cleanCategory(ctx, "Crash Dumps", cleanCrashDumps, opts))
+		tasks = append(tasks, cleanTask{"Crash Dumps", cleanCrashDumps})
 	}
 	if opts.ErrorReports {
-		result.merge(cleanCategory(ctx, "Error Reports", cleanErrorReports, opts))
+		tasks = append(tasks, cleanTask{"Error Reports", cleanErrorReports})
 	}
 	if opts.ThumbnailCache {
-		result.merge(cleanCategory(ctx, "Thumbnail Cache", cleanThumbnailCache, opts))
+		tasks = append(tasks, cleanTask{"Thumbnail Cache", cleanThumbnailCache})
 	}
 	if opts.IconCache {
-		result.merge(cleanCategory(ctx, "Icon Cache", cleanIconCache, opts))
+		tasks = append(tasks, cleanTask{"Icon Cache", cleanIconCache})
 	}
 	if opts.FontCache {
-		result.merge(cleanCategory(ctx, "Font Cache", cleanFontCache, opts))
+		tasks = append(tasks, cleanTask{"Font Cache", cleanFontCache})
 	}
 	if opts.ShaderCache {
-		result.merge(cleanCategory(ctx, "Shader Cache", cleanShaderCache, opts))
+		tasks = append(tasks, cleanTask{"Shader Cache", cleanShaderCache})
 	}
 	if opts.DNSCache {
-		result.merge(cleanCategory(ctx, "DNS Cache", cleanDNSCache, opts))
+		tasks = append(tasks, cleanTask{"DNS Cache", cleanDNSCache})
 	}
 	if opts.WindowsLogs {
-		result.merge(cleanCategory(ctx, "Windows Log Files", cleanWindowsLogs, opts))
+		tasks = append(tasks, cleanTask{"Windows Log Files", cleanWindowsLogs})
 	}
 	if opts.EventLogs {
-		result.merge(cleanCategory(ctx, "Event Logs", cleanEventLogs, opts))
+		tasks = append(tasks, cleanTask{"Event Logs", cleanEventLogs})
 	}
 	if opts.DeliveryOptimization {
-		result.merge(cleanCategory(ctx, "Delivery Optimization", cleanDeliveryOptimization, opts))
+		tasks = append(tasks, cleanTask{"Delivery Optimization", cleanDeliveryOptimization})
 	}
 	if opts.RecycleBin {
-		result.merge(cleanCategory(ctx, "Recycle Bin", cleanRecycleBin, opts))
+		tasks = append(tasks, cleanTask{"Recycle Bin", cleanRecycleBin})
 	}
-
-	// Application categories
 	if opts.ChromeCache {
-		result.merge(cleanCategory(ctx, "Chrome Cache", cleanChromeCache, opts))
+		tasks = append(tasks, cleanTask{"Chrome Cache", cleanChromeCache})
 	}
 	if opts.FirefoxCache {
-		result.merge(cleanCategory(ctx, "Firefox Cache", cleanFirefoxCache, opts))
+		tasks = append(tasks, cleanTask{"Firefox Cache", cleanFirefoxCache})
 	}
 	if opts.EdgeCache {
-		result.merge(cleanCategory(ctx, "Edge Cache", cleanEdgeCache, opts))
+		tasks = append(tasks, cleanTask{"Edge Cache", cleanEdgeCache})
 	}
 	if opts.BraveCache {
-		result.merge(cleanCategory(ctx, "Brave Cache", cleanBraveCache, opts))
+		tasks = append(tasks, cleanTask{"Brave Cache", cleanBraveCache})
 	}
 	if opts.OperaCache {
-		result.merge(cleanCategory(ctx, "Opera Cache", cleanOperaCache, opts))
+		tasks = append(tasks, cleanTask{"Opera Cache", cleanOperaCache})
 	}
 	if opts.DiscordCache {
-		result.merge(cleanCategory(ctx, "Discord Cache", cleanDiscordCache, opts))
+		tasks = append(tasks, cleanTask{"Discord Cache", cleanDiscordCache})
 	}
 	if opts.SpotifyCache {
-		result.merge(cleanCategory(ctx, "Spotify Cache", cleanSpotifyCache, opts))
+		tasks = append(tasks, cleanTask{"Spotify Cache", cleanSpotifyCache})
 	}
 	if opts.SteamCache {
-		result.merge(cleanCategory(ctx, "Steam Cache", cleanSteamCache, opts))
+		tasks = append(tasks, cleanTask{"Steam Cache", cleanSteamCache})
 	}
 	if opts.TeamsCache {
-		result.merge(cleanCategory(ctx, "Teams Cache", cleanTeamsCache, opts))
+		tasks = append(tasks, cleanTask{"Teams Cache", cleanTeamsCache})
 	}
 	if opts.VSCodeCache {
-		result.merge(cleanCategory(ctx, "VS Code Cache", cleanVSCodeCache, opts))
+		tasks = append(tasks, cleanTask{"VS Code Cache", cleanVSCodeCache})
 	}
 	if opts.JavaCache {
-		result.merge(cleanCategory(ctx, "Java Cache", cleanJavaCache, opts))
+		tasks = append(tasks, cleanTask{"Java Cache", cleanJavaCache})
 	}
 
-	// Registry cleaning (legacy, Windows-specific)
-	if opts.Registry {
-		result.merge(cleanCategory(ctx, "Registry", cleanRegistry, opts))
+	if len(tasks) == 0 {
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Run categories concurrently via worker pool
+	taskCh := make(chan cleanTask, len(tasks))
+	resultCh := make(chan CleanResult, len(tasks))
+
+	workers := maxCleanWorkers
+	if len(tasks) < workers {
+		workers = len(tasks)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for task := range taskCh {
+				resultCh <- cleanCategory(ctx, task.name, task.fn, opts)
+			}
+		}()
+	}
+
+	for _, t := range tasks {
+		taskCh <- t
+	}
+	close(taskCh)
+
+	// Close results channel once all workers finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	for r := range resultCh {
+		result.merge(r)
 	}
 
 	result.Duration = time.Since(start)
@@ -207,6 +267,8 @@ func (r *CleanResult) merge(other CleanResult) {
 	r.FilesDeleted += other.FilesDeleted
 	r.SkippedFiles += other.SkippedFiles
 	r.SpaceFreed += other.SpaceFreed
+	r.LockedFiles += other.LockedFiles
+	r.PermissionFiles += other.PermissionFiles
 	r.Errors = append(r.Errors, other.Errors...)
 }
 
@@ -312,10 +374,16 @@ func cleanDirectoryInternal(dir string, maxAge time.Duration, dryRun bool) Clean
 			result.SpaceFreed += info.Size()
 		} else {
 			if err := removeWithTimeout(path, fileTimeout); err != nil {
-				if strings.Contains(err.Error(), "timeout") {
+				ce := classifyError(path, err)
+				switch ce.Type {
+				case ErrorLocked, ErrorTimeout:
 					result.SkippedFiles++
-				} else {
-					result.Errors = append(result.Errors, fmt.Errorf("remove %s: %w", path, err))
+					result.LockedFiles++
+				case ErrorPermissionDenied:
+					result.SkippedFiles++
+					result.PermissionFiles++
+				default:
+					result.Errors = append(result.Errors, ce)
 				}
 			} else {
 				result.FilesDeleted++
@@ -843,10 +911,6 @@ func cleanJavaCache(opts CleanOptions) CleanResult {
 		return CleanResult{}
 	}
 	return cleanDirectory(filepath.Join(userProfile, "AppData", "LocalLow", "Sun", "Java", "Deployment", "cache"), 0, opts.DryRun)
-}
-
-func cleanRegistry(opts CleanOptions) CleanResult {
-	return cleanRegistryPlatform(opts.DryRun)
 }
 
 // FormatBytes formats a byte count into a human-readable string

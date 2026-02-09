@@ -11,20 +11,19 @@ import (
 var optimizeCmd = &cobra.Command{
 	Use:   "optimize",
 	Short: "Optimize system performance",
-	Long:  `Optimize startup programs, network settings, registry, and disk performance.`,
+	Long:  `Optimize startup programs, network settings, and disk performance.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		all, _ := cmd.Flags().GetBool("all")
 		startup, _ := cmd.Flags().GetBool("startup")
 		network, _ := cmd.Flags().GetBool("network")
-		reg, _ := cmd.Flags().GetBool("registry")
 		disk, _ := cmd.Flags().GetBool("disk")
 
 		if all {
-			startup, network, reg, disk = true, true, true, true
+			startup, network, disk = true, true, true
 		}
 
-		if !startup && !network && !reg && !disk {
-			fmt.Println("No optimization targets specified. Use --all or specify targets (--startup, --network, etc.)")
+		if !startup && !network && !disk {
+			fmt.Println("No optimization targets specified. Use --all or specify targets (--startup, --network, --disk)")
 			return
 		}
 
@@ -45,13 +44,6 @@ var optimizeCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		if reg {
-			fmt.Println("--- Registry Optimization ---")
-			result := optimizer.OptimizeRegistry()
-			optimizer.PrintRegistryResult(result)
-			fmt.Println()
-		}
-
 		if disk {
 			fmt.Println("--- Disk Optimization ---")
 			result := optimizer.OptimizeDisk()
@@ -67,7 +59,6 @@ func init() {
 	optimizeCmd.Flags().Bool("all", false, "Run all optimizations")
 	optimizeCmd.Flags().Bool("startup", false, "Optimize startup programs")
 	optimizeCmd.Flags().Bool("network", false, "Optimize network settings")
-	optimizeCmd.Flags().Bool("registry", false, "Clean registry")
 	optimizeCmd.Flags().Bool("disk", false, "Optimize disk performance")
 	rootCmd.AddCommand(optimizeCmd)
 }

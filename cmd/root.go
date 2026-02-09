@@ -10,14 +10,14 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "syscleaner",
 	Short: "SysCleaner - Windows System Cleaner & Gaming Optimizer",
-	Long: `SysCleaner is a free, open-source Windows system optimizer.
+	Long: `SysCleaner is a free, open-source Windows system optimizer for gamers.
 
 Features:
-  - Deep system cleaning (temp files, browser caches, registry, logs)
+  - Deep system cleaning (temp files, browser caches, logs)
   - Gaming mode (auto-detects games, boosts CPU/RAM priority)
-  - Background daemon (auto-enables gaming mode when games launch)
-  - System analyzer (performance scoring and recommendations)
-  - System optimizer (startup, network, registry, disk optimizations)`,
+  - Extreme mode (stops Explorer shell, maximum performance)
+  - System optimizer (startup, network, disk optimizations)
+  - CPU priority manager (permanent per-process priority settings)`,
 }
 
 func Execute() {
