@@ -4,11 +4,13 @@ package gui
 
 import (
 	"image/color"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"syscleaner/gui/views"
 	"syscleaner/pkg/gaming"
@@ -93,17 +95,72 @@ func Run() {
 	w.ShowAndRun()
 }
 
-func createMainInterface(w fyne.Window) fyne.CanvasObject {
-	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("Dashboard", theme.HomeIcon(), views.NewDashboard()),
-		container.NewTabItemWithIcon("Extreme Mode", theme.WarningIcon(), views.NewExtremeModePanel(w)),
-		container.NewTabItemWithIcon("Clean", theme.DeleteIcon(), views.NewCleanPanel()),
-		container.NewTabItemWithIcon("Optimize", theme.SettingsIcon(), views.NewOptimizePanel()),
-		container.NewTabItemWithIcon("CPU Priority", theme.MediaPlayIcon(), views.NewPriorityPanel(w)),
-		container.NewTabItemWithIcon("Monitor", theme.InfoIcon(), views.NewMonitorPanel()),
-	)
+// lazyTab creates a tab whose content is built on first selection.
+// This avoids initializing heavy panels (monitors, process lists) at startup.
+func lazyTab(name string, icon fyne.Resource, builder func() fyne.CanvasObject) *container.TabItem {
+	var once sync.Once
+	placeholder := container.NewStack(widget.NewLabel("Loading..."))
+	tab := container.NewTabItemWithIcon(name, icon, placeholder)
 
+	// The actual content will be swapped in on first view via OnSelected.
+	// We store the builder and once so createMainInterface can wire them up.
+	tab.Content = &lazyContainer{
+		placeholder: placeholder,
+		builder:     builder,
+		once:        &once,
+	}
+	return tab
+}
+
+// lazyContainer defers building its real content until first render.
+type lazyContainer struct {
+	widget.BaseWidget
+	placeholder *fyne.Container
+	builder     func() fyne.CanvasObject
+	once        *sync.Once
+	real        fyne.CanvasObject
+}
+
+func (l *lazyContainer) CreateRenderer() fyne.WidgetRenderer {
+	l.once.Do(func() {
+		l.real = l.builder()
+	})
+	if l.real != nil {
+		return widget.NewSimpleRenderer(l.real)
+	}
+	return widget.NewSimpleRenderer(l.placeholder)
+}
+
+func createMainInterface(w fyne.Window) fyne.CanvasObject {
+	// Dashboard loads eagerly since it's the first visible tab
+	dashTab := container.NewTabItemWithIcon("Dashboard", theme.HomeIcon(), views.NewDashboard())
+
+	// Other tabs load lazily on first selection
+	extremeTab := lazyTab("Extreme Mode", theme.WarningIcon(), func() fyne.CanvasObject {
+		return views.NewExtremeModePanel(w)
+	})
+	cleanTab := lazyTab("Clean", theme.DeleteIcon(), views.NewCleanPanel)
+	optimizeTab := lazyTab("Optimize", theme.SettingsIcon(), views.NewOptimizePanel)
+	cpuTab := lazyTab("CPU Priority", theme.MediaPlayIcon(), func() fyne.CanvasObject {
+		return views.NewPriorityPanel(w)
+	})
+	monitorTab := lazyTab("Monitor", theme.InfoIcon(), views.NewMonitorPanel)
+
+	tabs := container.NewAppTabs(dashTab, extremeTab, cleanTab, optimizeTab, cpuTab, monitorTab)
 	tabs.SetTabLocation(container.TabLocationLeading)
+
+	// Trigger lazy content initialization when a tab is selected
+	tabs.OnSelected = func(item *container.TabItem) {
+		if lc, ok := item.Content.(*lazyContainer); ok {
+			lc.once.Do(func() {
+				lc.real = lc.builder()
+			})
+			if lc.real != nil {
+				item.Content = lc.real
+				tabs.Refresh()
+			}
+		}
+	}
 
 	return tabs
 }

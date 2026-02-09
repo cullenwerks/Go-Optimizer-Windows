@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -113,7 +114,18 @@ const (
 	defaultOpTimeout = 5 * time.Minute  // Overall operation timeout
 )
 
-// PerformClean orchestrates all cleaning operations based on options
+// cleanTask represents a single cleaning category to execute
+type cleanTask struct {
+	name string
+	fn   func(CleanOptions) CleanResult
+}
+
+// maxCleanWorkers is the number of concurrent cleaning goroutines.
+// Limited to 4 to avoid excessive disk I/O contention on spinning drives.
+const maxCleanWorkers = 4
+
+// PerformClean orchestrates all cleaning operations based on options.
+// Independent categories run concurrently via a worker pool for faster execution.
 func PerformClean(opts CleanOptions) CleanResult {
 	start := time.Now()
 	result := CleanResult{}
@@ -121,89 +133,128 @@ func PerformClean(opts CleanOptions) CleanResult {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 
-	// System categories
+	// Build list of enabled categories
+	var tasks []cleanTask
 	if opts.WindowsTemp {
-		result.merge(cleanCategory(ctx, "Windows Temp", cleanWindowsTemp, opts))
+		tasks = append(tasks, cleanTask{"Windows Temp", cleanWindowsTemp})
 	}
 	if opts.UserTemp {
-		result.merge(cleanCategory(ctx, "User Temp", cleanUserTemp, opts))
+		tasks = append(tasks, cleanTask{"User Temp", cleanUserTemp})
 	}
 	if opts.WindowsUpdate {
-		result.merge(cleanCategory(ctx, "Windows Update Cache", cleanWindowsUpdate, opts))
+		tasks = append(tasks, cleanTask{"Windows Update Cache", cleanWindowsUpdate})
 	}
 	if opts.WindowsInstaller {
-		result.merge(cleanCategory(ctx, "Windows Installer Cache", cleanWindowsInstaller, opts))
+		tasks = append(tasks, cleanTask{"Windows Installer Cache", cleanWindowsInstaller})
 	}
 	if opts.Prefetch {
-		result.merge(cleanCategory(ctx, "Prefetch", cleanPrefetch, opts))
+		tasks = append(tasks, cleanTask{"Prefetch", cleanPrefetch})
 	}
 	if opts.CrashDumps {
-		result.merge(cleanCategory(ctx, "Crash Dumps", cleanCrashDumps, opts))
+		tasks = append(tasks, cleanTask{"Crash Dumps", cleanCrashDumps})
 	}
 	if opts.ErrorReports {
-		result.merge(cleanCategory(ctx, "Error Reports", cleanErrorReports, opts))
+		tasks = append(tasks, cleanTask{"Error Reports", cleanErrorReports})
 	}
 	if opts.ThumbnailCache {
-		result.merge(cleanCategory(ctx, "Thumbnail Cache", cleanThumbnailCache, opts))
+		tasks = append(tasks, cleanTask{"Thumbnail Cache", cleanThumbnailCache})
 	}
 	if opts.IconCache {
-		result.merge(cleanCategory(ctx, "Icon Cache", cleanIconCache, opts))
+		tasks = append(tasks, cleanTask{"Icon Cache", cleanIconCache})
 	}
 	if opts.FontCache {
-		result.merge(cleanCategory(ctx, "Font Cache", cleanFontCache, opts))
+		tasks = append(tasks, cleanTask{"Font Cache", cleanFontCache})
 	}
 	if opts.ShaderCache {
-		result.merge(cleanCategory(ctx, "Shader Cache", cleanShaderCache, opts))
+		tasks = append(tasks, cleanTask{"Shader Cache", cleanShaderCache})
 	}
 	if opts.DNSCache {
-		result.merge(cleanCategory(ctx, "DNS Cache", cleanDNSCache, opts))
+		tasks = append(tasks, cleanTask{"DNS Cache", cleanDNSCache})
 	}
 	if opts.WindowsLogs {
-		result.merge(cleanCategory(ctx, "Windows Log Files", cleanWindowsLogs, opts))
+		tasks = append(tasks, cleanTask{"Windows Log Files", cleanWindowsLogs})
 	}
 	if opts.EventLogs {
-		result.merge(cleanCategory(ctx, "Event Logs", cleanEventLogs, opts))
+		tasks = append(tasks, cleanTask{"Event Logs", cleanEventLogs})
 	}
 	if opts.DeliveryOptimization {
-		result.merge(cleanCategory(ctx, "Delivery Optimization", cleanDeliveryOptimization, opts))
+		tasks = append(tasks, cleanTask{"Delivery Optimization", cleanDeliveryOptimization})
 	}
 	if opts.RecycleBin {
-		result.merge(cleanCategory(ctx, "Recycle Bin", cleanRecycleBin, opts))
+		tasks = append(tasks, cleanTask{"Recycle Bin", cleanRecycleBin})
 	}
-
-	// Application categories
 	if opts.ChromeCache {
-		result.merge(cleanCategory(ctx, "Chrome Cache", cleanChromeCache, opts))
+		tasks = append(tasks, cleanTask{"Chrome Cache", cleanChromeCache})
 	}
 	if opts.FirefoxCache {
-		result.merge(cleanCategory(ctx, "Firefox Cache", cleanFirefoxCache, opts))
+		tasks = append(tasks, cleanTask{"Firefox Cache", cleanFirefoxCache})
 	}
 	if opts.EdgeCache {
-		result.merge(cleanCategory(ctx, "Edge Cache", cleanEdgeCache, opts))
+		tasks = append(tasks, cleanTask{"Edge Cache", cleanEdgeCache})
 	}
 	if opts.BraveCache {
-		result.merge(cleanCategory(ctx, "Brave Cache", cleanBraveCache, opts))
+		tasks = append(tasks, cleanTask{"Brave Cache", cleanBraveCache})
 	}
 	if opts.OperaCache {
-		result.merge(cleanCategory(ctx, "Opera Cache", cleanOperaCache, opts))
+		tasks = append(tasks, cleanTask{"Opera Cache", cleanOperaCache})
 	}
 	if opts.DiscordCache {
-		result.merge(cleanCategory(ctx, "Discord Cache", cleanDiscordCache, opts))
+		tasks = append(tasks, cleanTask{"Discord Cache", cleanDiscordCache})
 	}
 	if opts.SpotifyCache {
-		result.merge(cleanCategory(ctx, "Spotify Cache", cleanSpotifyCache, opts))
+		tasks = append(tasks, cleanTask{"Spotify Cache", cleanSpotifyCache})
 	}
 	if opts.SteamCache {
-		result.merge(cleanCategory(ctx, "Steam Cache", cleanSteamCache, opts))
+		tasks = append(tasks, cleanTask{"Steam Cache", cleanSteamCache})
 	}
 	if opts.TeamsCache {
-		result.merge(cleanCategory(ctx, "Teams Cache", cleanTeamsCache, opts))
+		tasks = append(tasks, cleanTask{"Teams Cache", cleanTeamsCache})
 	}
 	if opts.VSCodeCache {
-		result.merge(cleanCategory(ctx, "VS Code Cache", cleanVSCodeCache, opts))
+		tasks = append(tasks, cleanTask{"VS Code Cache", cleanVSCodeCache})
 	}
 	if opts.JavaCache {
-		result.merge(cleanCategory(ctx, "Java Cache", cleanJavaCache, opts))
+		tasks = append(tasks, cleanTask{"Java Cache", cleanJavaCache})
+	}
+
+	if len(tasks) == 0 {
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Run categories concurrently via worker pool
+	taskCh := make(chan cleanTask, len(tasks))
+	resultCh := make(chan CleanResult, len(tasks))
+
+	workers := maxCleanWorkers
+	if len(tasks) < workers {
+		workers = len(tasks)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for task := range taskCh {
+				resultCh <- cleanCategory(ctx, task.name, task.fn, opts)
+			}
+		}()
+	}
+
+	for _, t := range tasks {
+		taskCh <- t
+	}
+	close(taskCh)
+
+	// Close results channel once all workers finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	for r := range resultCh {
+		result.merge(r)
 	}
 
 	result.Duration = time.Since(start)
