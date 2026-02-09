@@ -3,7 +3,6 @@ module syscleaner
 go 1.21
 
 require (
-	github.com/kardianos/service v1.2.2
 	github.com/shirou/gopsutil/v3 v3.23.12
 	github.com/spf13/cobra v1.8.0
 	golang.org/x/sys v0.15.0

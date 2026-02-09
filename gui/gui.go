@@ -99,7 +99,6 @@ func createMainInterface(w fyne.Window) fyne.CanvasObject {
 		container.NewTabItemWithIcon("Extreme Mode", theme.WarningIcon(), views.NewExtremeModePanel(w)),
 		container.NewTabItemWithIcon("Clean", theme.DeleteIcon(), views.NewCleanPanel()),
 		container.NewTabItemWithIcon("Optimize", theme.SettingsIcon(), views.NewOptimizePanel()),
-		container.NewTabItemWithIcon("Tools", theme.ComputerIcon(), views.NewToolsPanel()),
 		container.NewTabItemWithIcon("CPU Priority", theme.MediaPlayIcon(), views.NewPriorityPanel(w)),
 		container.NewTabItemWithIcon("Monitor", theme.InfoIcon(), views.NewMonitorPanel()),
 	)

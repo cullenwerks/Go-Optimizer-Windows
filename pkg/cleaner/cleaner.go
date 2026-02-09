@@ -45,13 +45,6 @@ type CleanOptions struct {
 	VSCodeCache   bool
 	JavaCache     bool
 
-	// Legacy flags (for backwards compatibility)
-	TempFiles  bool
-	Browser    bool
-	Registry   bool
-	Logs       bool
-	Thumbnails bool
-
 	// Execution options
 	DryRun   bool
 	Progress ProgressFunc
@@ -82,30 +75,6 @@ func PerformClean(opts CleanOptions) CleanResult {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
-
-	// Map legacy flags to new granular flags
-	if opts.TempFiles {
-		opts.WindowsTemp = true
-		opts.UserTemp = true
-		opts.WindowsUpdate = true
-		opts.WindowsInstaller = true
-		opts.CrashDumps = true
-		opts.ErrorReports = true
-	}
-	if opts.Browser {
-		opts.ChromeCache = true
-		opts.FirefoxCache = true
-		opts.EdgeCache = true
-		opts.BraveCache = true
-		opts.OperaCache = true
-	}
-	if opts.Thumbnails {
-		opts.ThumbnailCache = true
-		opts.IconCache = true
-	}
-	if opts.Logs {
-		opts.WindowsLogs = true
-	}
 
 	// System categories
 	if opts.WindowsTemp {
@@ -190,11 +159,6 @@ func PerformClean(opts CleanOptions) CleanResult {
 	}
 	if opts.JavaCache {
 		result.merge(cleanCategory(ctx, "Java Cache", cleanJavaCache, opts))
-	}
-
-	// Registry cleaning (legacy, Windows-specific)
-	if opts.Registry {
-		result.merge(cleanCategory(ctx, "Registry", cleanRegistry, opts))
 	}
 
 	result.Duration = time.Since(start)
@@ -843,10 +807,6 @@ func cleanJavaCache(opts CleanOptions) CleanResult {
 		return CleanResult{}
 	}
 	return cleanDirectory(filepath.Join(userProfile, "AppData", "LocalLow", "Sun", "Java", "Deployment", "cache"), 0, opts.DryRun)
-}
-
-func cleanRegistry(opts CleanOptions) CleanResult {
-	return cleanRegistryPlatform(opts.DryRun)
 }
 
 // FormatBytes formats a byte count into a human-readable string

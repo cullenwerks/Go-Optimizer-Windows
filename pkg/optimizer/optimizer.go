@@ -9,8 +9,7 @@ import (
 
 // Results holds overall optimization results.
 type Results struct {
-	StartupDisabled        int
-	RegistryEntriesRemoved int
+	StartupDisabled int
 }
 
 // StartupResult holds startup optimization results.
@@ -31,12 +30,6 @@ type StartupProgram struct {
 type NetworkResult struct {
 	LatencyReduction int
 	Optimizations    []string
-}
-
-// RegistryResult holds registry optimization results.
-type RegistryResult struct {
-	EntriesRemoved int
-	BackupPath     string
 }
 
 // DiskResult holds disk optimization results.
@@ -89,11 +82,6 @@ func OptimizeNetwork() NetworkResult {
 	}
 
 	return result
-}
-
-// OptimizeRegistry cleans unnecessary registry entries.
-func OptimizeRegistry() RegistryResult {
-	return optimizeRegistryPlatform()
 }
 
 // OptimizeDisk optimizes disk performance.
@@ -157,11 +145,6 @@ func PrintNetworkResult(result NetworkResult) {
 	for _, opt := range result.Optimizations {
 		fmt.Printf("    - %s\n", opt)
 	}
-}
-
-// PrintRegistryResult displays registry optimization results.
-func PrintRegistryResult(result RegistryResult) {
-	fmt.Printf("  Registry entries cleaned: %d\n", result.EntriesRemoved)
 }
 
 // PrintDiskResult displays disk optimization results.

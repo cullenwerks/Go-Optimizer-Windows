@@ -11,7 +11,7 @@ import (
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Clean system junk files and free disk space",
-	Long: `Remove temporary files, browser caches, log files, prefetch data, thumbnails, and registry junk.
+	Long: `Remove temporary files, browser caches, log files, prefetch data, and thumbnails.
 
 You can select specific categories or use group flags like --all, --system, --browsers, --apps.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -28,7 +28,6 @@ You can select specific categories or use group flags like --all, --system, --br
 			systemGroup = true
 			browsersGroup = true
 			appsGroup = true
-			opts.Registry = true
 		}
 
 		if systemGroup {
@@ -149,31 +148,6 @@ You can select specific categories or use group flags like --all, --system, --br
 		if cmd.Flags().Changed("java") {
 			opts.JavaCache, _ = cmd.Flags().GetBool("java")
 		}
-		if cmd.Flags().Changed("registry") {
-			opts.Registry, _ = cmd.Flags().GetBool("registry")
-		}
-
-		// Legacy flags support
-		if cmd.Flags().Changed("temp") {
-			temp, _ := cmd.Flags().GetBool("temp")
-			opts.WindowsTemp = temp
-			opts.UserTemp = temp
-		}
-		if cmd.Flags().Changed("browser") {
-			browser, _ := cmd.Flags().GetBool("browser")
-			opts.ChromeCache = browser
-			opts.FirefoxCache = browser
-			opts.EdgeCache = browser
-		}
-		if cmd.Flags().Changed("logs") {
-			logs, _ := cmd.Flags().GetBool("logs")
-			opts.WindowsLogs = logs
-		}
-		if cmd.Flags().Changed("thumbnails") {
-			thumbnails, _ := cmd.Flags().GetBool("thumbnails")
-			opts.ThumbnailCache = thumbnails
-			opts.IconCache = thumbnails
-		}
 
 		// Check if any category is selected
 		hasSelection := opts.WindowsTemp || opts.UserTemp || opts.WindowsUpdate ||
@@ -184,8 +158,7 @@ You can select specific categories or use group flags like --all, --system, --br
 			opts.RecycleBin || opts.ChromeCache || opts.FirefoxCache ||
 			opts.EdgeCache || opts.BraveCache || opts.OperaCache ||
 			opts.DiscordCache || opts.SpotifyCache || opts.SteamCache ||
-			opts.TeamsCache || opts.VSCodeCache || opts.JavaCache ||
-			opts.Registry
+			opts.TeamsCache || opts.VSCodeCache || opts.JavaCache
 
 		if !hasSelection {
 			fmt.Println("No cleaning targets specified.")
@@ -267,13 +240,6 @@ func init() {
 	cleanCmd.Flags().Bool("teams", false, "Teams cache")
 	cleanCmd.Flags().Bool("vscode", false, "VS Code cache")
 	cleanCmd.Flags().Bool("java", false, "Java cache")
-
-	// Legacy flags (backwards compatibility)
-	cleanCmd.Flags().Bool("temp", false, "Clean temporary files (legacy)")
-	cleanCmd.Flags().Bool("browser", false, "Clean browser caches (legacy)")
-	cleanCmd.Flags().Bool("logs", false, "Clean log files (legacy)")
-	cleanCmd.Flags().Bool("thumbnails", false, "Clean thumbnail caches (legacy)")
-	cleanCmd.Flags().Bool("registry", false, "Clean registry junk")
 
 	// Execution options
 	cleanCmd.Flags().Bool("dry-run", false, "Show what would be cleaned without deleting")
