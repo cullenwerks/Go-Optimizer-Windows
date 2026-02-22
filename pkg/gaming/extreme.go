@@ -117,6 +117,31 @@ var (
 		"WpnService",           // Windows Push Notifications System
 		"WpnUserService",       // Windows Push Notifications User Service
 		"BcastDVRUserService",  // GameDVR and Broadcast User Service (if not recording)
+
+		// === Remote Access ===
+		"RemoteAccess", // Routing and Remote Access
+
+		// === Offline / Sync ===
+		"CscService", // Offline Files
+
+		// === Windows Store / Licensing ===
+		"ClipSVC",        // Client License Service (Store app DRM)
+		"InstallService", // Microsoft Store Install Service
+		"EntAppSvc",      // Enterprise App Management
+
+		// === Web Account / Identity ===
+		"TokenBroker", // Web Account Manager (Microsoft account sync)
+
+		// === Windows Hello / Biometrics (additional) ===
+		"NgcCtnrSvc", // Windows Hello PIN Container
+		"NgcSvc",     // Windows Hello Credential Service
+
+		// === Clipboard ===
+		"cbdhsvc", // Clipboard User Service
+
+		// === Messaging ===
+		"MessagingService", // Text messaging / MMS routing
+		"PushToInstall",    // Windows Push To Install
 	}
 
 	// Background applications to close in Extreme Mode
@@ -157,6 +182,46 @@ var (
 		"CCleaner64.exe",
 		"iCloudServices.exe",
 		"AppleMobileDeviceService.exe",
+
+		// === Browsers ===
+		"chrome.exe",
+		"firefox.exe",
+		"brave.exe",
+		"opera.exe",
+		"vivaldi.exe",
+		"msedgewebview2.exe",
+
+		// === Peripheral / RGB software ===
+		"RazerCortex.exe",
+		"RazerSynapse3.exe",
+		"RazerSynapse.exe",
+		"LGHUB.exe",
+		"LogiOverlay.exe",
+		"Overwolf.exe",
+		"OverwolfBrowser.exe",
+		"iCUEService.exe",
+		"OpenRGB.exe",
+		"ICUE.exe",
+		"LightingService.exe",
+
+		// === Gaming-adjacent apps ===
+		"EpicWebHelper.exe",
+		"XboxApp.exe",
+		"GamingServices.exe",
+		"Parsec.exe",
+		"TwitchUI.exe",
+		"Playnite.exe",
+		"obs64.exe",
+		"NahimicService.exe",
+		"MSIAfterburner.exe",
+		"WallpaperEngine.exe",
+		"Wallpaper32.exe",
+		"Wallpaper64.exe",
+
+		// === Crash reporters / update helpers ===
+		"CrashpadHandler.exe",
+		"CefSharp.BrowserSubprocess.exe",
+		"EpicGamesLauncher.exe",
 	}
 )
 
