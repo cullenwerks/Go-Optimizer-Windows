@@ -206,8 +206,8 @@ var (
 		"TwitchUI.exe",
 		"Playnite.exe",
 		"obs64.exe",
-		"NahimicService.exe", // OEM audio DSP (MSI/ASUS) — kills surround/mic effects on gaming laptops
-		"MSIAfterburner.exe",
+		"NahimicService.exe", // OEM audio DSP (MSI/ASUS) — whitelist this if you need surround sound or mic DSP
+		"MSIAfterburner.exe", // NOTE: killing this stops custom fan curves; whitelist on thermally-limited systems
 		"WallpaperEngine.exe",
 		"Wallpaper32.exe",
 		"Wallpaper64.exe",
@@ -215,7 +215,7 @@ var (
 		// === Crash reporters / update helpers ===
 		"CrashpadHandler.exe",
 		"CefSharp.BrowserSubprocess.exe",
-		"EpicGamesLauncher.exe",
+		"EpicGamesLauncher.exe", // NOTE: some Epic titles (Fortnite, Rocket League) require this at runtime — whitelist if using Epic games
 	}
 )
 
