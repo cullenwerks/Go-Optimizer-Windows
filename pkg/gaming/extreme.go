@@ -3,6 +3,8 @@ package gaming
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -219,6 +221,27 @@ var (
 	}
 )
 
+
+func extremeSentinelPath() string {
+	return filepath.Join(os.TempDir(), "syscleaner_extreme_active")
+}
+
+func writeSentinel() {
+	f, err := os.Create(extremeSentinelPath())
+	if err == nil {
+		f.Close()
+	}
+}
+
+func deleteSentinel() {
+	os.Remove(extremeSentinelPath())
+}
+
+func sentinelExists() bool {
+	_, err := os.Stat(extremeSentinelPath())
+	return err == nil
+}
+
 // GetProcessesToKill returns the list of processes that would be terminated.
 func GetProcessesToKill() []string {
 	return processesToKill
@@ -310,6 +333,7 @@ func EnableExtremeMode(progress func(string)) error {
 	extremeMode.ramMonitorActive = true
 
 	extremeModeActive = true
+	writeSentinel()
 	log.Println("[SysCleaner] Extreme Mode ACTIVATED - Maximum performance enabled")
 	return nil
 }
@@ -359,6 +383,7 @@ func DisableExtremeMode(progress func(string)) error {
 	enableVisualEffects()
 
 	extremeModeActive = false
+	deleteSentinel()
 
 	// Disable regular gaming mode
 	mu.Unlock()
@@ -373,7 +398,12 @@ func DisableExtremeMode(progress func(string)) error {
 func IsExtremeModeActive() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return extremeModeActive
+	if extremeModeActive {
+		return true
+	}
+	// When running as the GUI parent, the in-process flag is always false
+	// because Enable was called in a child process. Fall back to sentinel file.
+	return sentinelExists()
 }
 
 // CloseBackgroundApps closes non-essential background applications.
