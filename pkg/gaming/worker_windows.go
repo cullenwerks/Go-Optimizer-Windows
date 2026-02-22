@@ -22,8 +22,8 @@ func RunExtremeModeWorker(action string, progress func(string)) error {
 		return fmt.Errorf("failed to locate executable: %w", err)
 	}
 
-	// Build command line: `"<exe>" --extreme-worker <action>`
-	cmdLine := fmt.Sprintf(`"%s" --extreme-worker %s`, exePath, action)
+	// Build command line: `"<exe>" extreme-worker <action>`
+	cmdLine := fmt.Sprintf(`"%s" extreme-worker %s`, exePath, action)
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
 		return fmt.Errorf("failed to encode command line: %w", err)
@@ -36,7 +36,8 @@ func RunExtremeModeWorker(action string, progress func(string)) error {
 	if err := windows.CreatePipe(&readPipe, &writePipe, &sa, 0); err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	defer windows.CloseHandle(readPipe)
+	// NOTE: do NOT defer CloseHandle(readPipe) here -- os.NewFile below
+	// takes ownership and installs a finalizer; explicit Close() below handles it.
 
 	// Mark the read end as non-inheritable so the child doesn't get a copy of it.
 	windows.SetHandleInformation(readPipe, windows.HANDLE_FLAG_INHERIT, 0)
@@ -68,6 +69,7 @@ func RunExtremeModeWorker(action string, progress func(string)) error {
 	// Close the write end in the parent — child now owns it exclusively.
 	windows.CloseHandle(writePipe)
 	if err != nil {
+		windows.CloseHandle(readPipe)
 		return fmt.Errorf("failed to spawn worker process: %w", err)
 	}
 	defer windows.CloseHandle(pi.Thread)
@@ -82,6 +84,7 @@ func RunExtremeModeWorker(action string, progress func(string)) error {
 			progress(line)
 		}
 	}
+	reader.Close() // closes readPipe and clears the GC finalizer
 
 	// Wait for the child to exit completely.
 	windows.WaitForSingleObject(pi.Process, windows.INFINITE)

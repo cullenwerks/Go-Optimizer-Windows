@@ -64,7 +64,7 @@ WARNING: This mode removes the desktop shell. Use the GUI launcher to start game
 }
 
 var extremeWorkerCmd = &cobra.Command{
-	Use:    "--extreme-worker",
+	Use:    "extreme-worker",
 	Hidden: true,
 	Args:   cobra.ExactArgs(1), // "enable" or "disable"
 	Run: func(cmd *cobra.Command, args []string) {
