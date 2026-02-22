@@ -110,10 +110,26 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    # Only publish a release on tag pushes, not manual dispatches
-    if: github.ref_type == 'tag'
+    # Publish on tag pushes or manual workflow_dispatch
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Resolve release name
+        id: release
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "name=SysCleaner ${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${{ github.event.inputs.version }}" && "${{ github.event.inputs.version }}" != "dev" ]]; then
+            echo "name=SysCleaner v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "tag=v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            SHORT="${GITHUB_SHA::7}"
+            echo "name=SysCleaner dev-${SHORT}" >> "$GITHUB_OUTPUT"
+            echo "tag=dev-${SHORT}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -123,9 +139,10 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: SysCleaner ${{ github.ref_name }}
+          name: ${{ steps.release.outputs.name }}
+          tag_name: ${{ steps.release.outputs.tag }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(steps.release.outputs.tag, '-') }}
           generate_release_notes: true
           files: |
             artifacts/SysCleaner-x64/SysCleaner-x64.exe
