@@ -1,12 +1,20 @@
-# SysCleaner v2.0
+<p align="center">
+  <img src="assets/icon.svg" alt="SysCleaner icon" width="96" height="96"/>
+  <br/>
+  <span style="font-size:2.5em;font-weight:900;letter-spacing:0.05em">SysCleaner</span>
+  <br/>
+  <em>Free, open-source Windows system optimizer with extreme gaming mode</em>
+</p>
 
-> **Free, open-source Windows system optimizer with extreme gaming mode**
-> Powerful GUI application for maximum PC performance
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
+  <img src="https://img.shields.io/badge/go-1.21+-blue.svg" alt="Go Version"/>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-blue.svg" alt="Platform"/>
+  <img src="https://img.shields.io/badge/arch-x64%20%7C%20ARM64-blue.svg" alt="Arch"/>
+  <img src="https://img.shields.io/badge/price-FREE-brightgreen.svg" alt="Price"/>
+</p>
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://go.dev/dl/)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue.svg)](https://www.microsoft.com/windows)
-[![Arch](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-blue.svg)](https://go.dev/dl/)
+---
 
 **SysCleaner v2.0** is a comprehensive Windows optimization tool built for gamers and power users. With an intuitive GUI, automated RAM monitoring, CPU priority management, and extreme performance modes, it delivers everything you need to maximize your system's potential.
 
