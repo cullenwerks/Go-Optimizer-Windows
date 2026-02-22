@@ -27,7 +27,7 @@ WARNING: This mode removes the desktop shell. Use the GUI launcher to start game
 			fmt.Println("Use 'syscleaner extreme --disable' to restore.")
 			fmt.Println()
 
-			if err := gaming.EnableExtremeMode(); err != nil {
+			if err := gaming.EnableExtremeMode(nil); err != nil {
 				fmt.Printf("  Error: %v\n", err)
 				return
 			}
@@ -43,7 +43,7 @@ WARNING: This mode removes the desktop shell. Use the GUI launcher to start game
 			fmt.Println("Disabling extreme performance mode...")
 			fmt.Println()
 
-			if err := gaming.DisableExtremeMode(); err != nil {
+			if err := gaming.DisableExtremeMode(nil); err != nil {
 				fmt.Printf("  Error: %v\n", err)
 				return
 			}

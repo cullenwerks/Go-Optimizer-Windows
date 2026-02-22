@@ -93,7 +93,9 @@ func (p *extremeModePanel) toggleExtremeMode() {
 		p.toggleBtn.Disable()
 		go func() {
 			defer p.toggleBtn.Enable()
-			if err := gaming.DisableExtremeMode(); err != nil {
+			if err := gaming.DisableExtremeMode(func(msg string) {
+				p.toggleBtn.SetText(msg)
+			}); err != nil {
 				dialog.ShowError(err, p.window)
 				return
 			}
@@ -116,7 +118,9 @@ func (p *extremeModePanel) toggleExtremeMode() {
 				p.toggleBtn.Disable()
 				go func() {
 					defer p.toggleBtn.Enable()
-					if err := gaming.EnableExtremeMode(); err != nil {
+					if err := gaming.EnableExtremeMode(func(msg string) {
+						p.toggleBtn.SetText(msg)
+					}); err != nil {
 						dialog.ShowError(err, p.window)
 						return
 					}

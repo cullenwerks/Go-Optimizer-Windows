@@ -225,7 +225,14 @@ func GetProcessesToKill() []string {
 }
 
 // EnableExtremeMode stops Windows Explorer and non-essential services.
-func EnableExtremeMode() error {
+func EnableExtremeMode(progress func(string)) error {
+	report := func(msg string) {
+		if progress != nil {
+			progress(msg)
+		}
+		log.Println("[SysCleaner]", msg)
+	}
+
 	if err := admin.RequireElevation("Extreme Performance Mode"); err != nil {
 		return err
 	}
@@ -256,13 +263,13 @@ func EnableExtremeMode() error {
 	}
 
 	// Close non-essential background applications using native API
-	log.Println("[SysCleaner] Closing background applications for extreme performance...")
+	report("Closing background apps...")
 	closedCount, closedApps := CloseBackgroundApps(ProcessWhitelist)
 	extremeMode.ClosedProcesses = closedApps
-	log.Printf("[SysCleaner] Closed %d background applications", closedCount)
+	report(fmt.Sprintf("Closed %d background apps", closedCount))
 
 	// Stop additional services for extreme mode.
-	log.Println("[SysCleaner] Stopping non-essential services for extreme performance...")
+	report("Stopping non-essential services...")
 	for i, svc := range extremeServicesToStop {
 		stopService(svc)
 		if i > 0 && i%3 == 0 {
@@ -271,20 +278,21 @@ func EnableExtremeMode() error {
 	}
 
 	// Ensure anti-cheat services are running
-	log.Println("[SysCleaner] Ensuring anti-cheat services are running...")
+	report("Ensuring anti-cheat services are running...")
 	for _, svc := range antiCheatServices {
 		startService(svc)
 	}
 
 	// Stop Windows Explorer (Desktop Experience) via WM_CLOSE to Shell_TrayWnd.
 	// This is a clean shutdown that does not trigger Session Manager auto-restart.
-	log.Println("[SysCleaner] Stopping Windows Explorer shell...")
+	report("Stopping Windows shell...")
 	if err := stopWindowsExplorer(); err != nil {
 		return fmt.Errorf("failed to stop explorer: %w", err)
 	}
 	extremeMode.ShellStopped = true
 
 	// Set ultimate performance power plan
+	report("Applying power plan...")
 	if err := setPowerSchemeNative("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"); err != nil {
 		log.Printf("[SysCleaner] Failed to set ultimate performance power plan: %v", err)
 	}
@@ -293,7 +301,7 @@ func EnableExtremeMode() error {
 	disableVisualEffects()
 
 	// Start RAM monitoring for automatic standby trimming
-	log.Println("[SysCleaner] Starting continuous RAM monitoring...")
+	report("Starting RAM monitor...")
 	if err := memory.EnableSeProfileSingleProcessPrivilege(); err != nil {
 		log.Printf("[SysCleaner] Warning: Failed to enable memory privileges: %v", err)
 		log.Println("[SysCleaner] RAM trimming may not work correctly. Run as Administrator.")
@@ -307,7 +315,14 @@ func EnableExtremeMode() error {
 }
 
 // DisableExtremeMode restores Windows Explorer and services.
-func DisableExtremeMode() error {
+func DisableExtremeMode(progress func(string)) error {
+	report := func(msg string) {
+		if progress != nil {
+			progress(msg)
+		}
+		log.Println("[SysCleaner]", msg)
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -317,19 +332,21 @@ func DisableExtremeMode() error {
 
 	// Stop RAM monitoring
 	if extremeMode.ramMonitorActive {
-		log.Println("[SysCleaner] Stopping RAM monitor...")
+		report("Stopping RAM monitor...")
 		memory.StopContinuousMonitor()
 		extremeMode.ramMonitorActive = false
 	}
 
 	// Restart Windows Explorer first
 	if extremeMode.ShellStopped {
+		report("Restoring Windows shell...")
 		if err := startWindowsExplorer(); err != nil {
 			return fmt.Errorf("failed to restart explorer: %w", err)
 		}
 	}
 
 	// Restore services with pacing
+	report("Restoring services...")
 	for i, svc := range extremeServicesToStop {
 		startService(svc)
 		if i > 0 && i%3 == 0 {
@@ -338,6 +355,7 @@ func DisableExtremeMode() error {
 	}
 
 	// Re-enable visual effects
+	report("Restoring visual settings...")
 	enableVisualEffects()
 
 	extremeModeActive = false
