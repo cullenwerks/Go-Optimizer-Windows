@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(GOOS=windows GOARCH=amd64 go build:*)",
+      "Bash(git rm:*)",
+      "Bash(GOOS=windows GOARCH=amd64 go get:*)",
+      "Bash(dir:*)",
+      "Bash(echo:*)",
+      "Bash(cmd /c:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -Command:*)",
+      "Bash(go test:*)",
+      "Bash(git push:*)",
+      "Bash(gh release list:*)",
+      "Bash(GOARCH=amd64 go build:*)",
+      "Bash(ls:*)",
+      "Bash(go env:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(wc:*)",
+      "Bash(gh release create:*)",
+      "Bash(go list:*)",
+      "Bash(script -q -c \"go build -tags gui ./...\" /dev/null:*)",
+      "Bash(git -C \"C:/Users/Cullen/git/SysCleaner\" diff pkg/cleaner/cleaner.go)",
+      "Bash(git --git-dir=\"C:/Users/Cullen/git/SysCleaner/.git\" --work-tree=\"C:/Users/Cullen/git/SysCleaner\" diff pkg/cleaner/cleaner.go)"
+    ]
+  }
+}
