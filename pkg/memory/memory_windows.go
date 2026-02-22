@@ -34,6 +34,8 @@ var (
 	procNtSetSystemInformation = ntdll.NewProc("NtSetSystemInformation")
 	psapi                      = windows.NewLazySystemDLL("psapi.dll")
 	procEmptyWorkingSet        = psapi.NewProc("EmptyWorkingSet")
+	kernel32                   = windows.NewLazySystemDLL("kernel32.dll")
+	procGlobalMemoryStatusEx   = kernel32.NewProc("GlobalMemoryStatusEx")
 
 	monitorActive bool
 	monitorDone   chan struct{}
@@ -58,6 +60,30 @@ type MemoryStats struct {
 	StandbyPercent float64
 	LastTrimTime   time.Time
 	TrimCount      int64
+}
+
+type memoryStatusEx struct {
+	dwLength                uint32
+	dwMemoryLoad            uint32
+	ullTotalPhys            uint64
+	ullAvailPhys            uint64
+	ullTotalPageFile        uint64
+	ullAvailPageFile        uint64
+	ullTotalVirtual         uint64
+	ullAvailVirtual         uint64
+	ullAvailExtendedVirtual uint64
+}
+
+// getMemoryStatus calls GlobalMemoryStatusEx for accurate physical RAM figures.
+// Returns (total, avail, err). avail = free + standby reclaimable (ullAvailPhys).
+func getMemoryStatus() (total, avail uint64, err error) {
+	var ms memoryStatusEx
+	ms.dwLength = uint32(unsafe.Sizeof(ms))
+	ret, _, e := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&ms)))
+	if ret == 0 {
+		return 0, 0, fmt.Errorf("GlobalMemoryStatusEx failed: %w", e)
+	}
+	return ms.ullTotalPhys, ms.ullAvailPhys, nil
 }
 
 // EnableSeProfileSingleProcessPrivilege enables the required privileges
@@ -142,6 +168,22 @@ func PurgeStandbyList() error {
 	return nil
 }
 
+// FlushModifiedList moves modified (dirty) pages to the standby list by writing
+// them to disk. Call before PurgeStandbyList so those pages become eligible
+// for purging, yielding a more thorough cleanup.
+func FlushModifiedList() error {
+	cmd := int32(MemoryFlushModifiedList)
+	ret, _, _ := procNtSetSystemInformation.Call(
+		uintptr(SystemMemoryListInformation),
+		uintptr(unsafe.Pointer(&cmd)),
+		uintptr(unsafe.Sizeof(cmd)),
+	)
+	if ret != 0 {
+		return fmt.Errorf("NtSetSystemInformation(FlushModifiedList) failed: %w", ntStatusError(ret))
+	}
+	return nil
+}
+
 // PurgeLowPriorityStandby clears only low-priority standby pages.
 // This is gentler than PurgeStandbyList and less likely to cause stutter.
 func PurgeLowPriorityStandby() error {
@@ -211,33 +253,51 @@ func StartContinuousMonitor(statsCallback func(MemoryStats)) {
 			case <-monitorDone:
 				return
 			case <-ticker.C:
-				vmem, err := mem.VirtualMemory()
-				if err != nil {
+				// Use GlobalMemoryStatusEx for accurate free/available; fall back to gopsutil
+				total, avail, statErr := getMemoryStatus()
+				vmem, _ := mem.VirtualMemory()
+
+				if statErr != nil && vmem == nil {
 					continue
 				}
+				if statErr != nil {
+					total = vmem.Total
+					avail = vmem.Available
+				}
 
-				totalGB := float64(vmem.Total) / 1024 / 1024 / 1024
-				usedGB := float64(vmem.Used) / 1024 / 1024 / 1024
-				freeGB := float64(vmem.Available) / 1024 / 1024 / 1024
-				// Standby ≈ Available - Free (approximation)
-				standbyGB := freeGB - (float64(vmem.Free) / 1024 / 1024 / 1024)
-				if standbyGB < 0 {
-					standbyGB = 0
+				totalGB := float64(total) / 1024 / 1024 / 1024
+				freeGB := float64(avail) / 1024 / 1024 / 1024
+				usedGB := float64(0)
+				usedPercent := float64(0)
+				standbyGB := float64(0)
+				if vmem != nil {
+					usedGB = float64(vmem.Used) / 1024 / 1024 / 1024
+					usedPercent = vmem.UsedPercent
+					// Standby approximation: Available - truly-free (gopsutil approximation)
+					standbyGB = freeGB - (float64(vmem.Free) / 1024 / 1024 / 1024)
+					if standbyGB < 0 {
+						standbyGB = 0
+					}
 				}
 
 				freePercent := (freeGB / totalGB) * 100
 				standbyPercent := (standbyGB / totalGB) * 100
+
+				monitorMu.Lock()
+				lastTrim := lastCleanTime
+				trimCnt := trimCountTotal
+				monitorMu.Unlock()
 
 				stats := MemoryStats{
 					TotalGB:        totalGB,
 					UsedGB:         usedGB,
 					FreeGB:         freeGB,
 					StandbyGB:      standbyGB,
-					UsedPercent:    vmem.UsedPercent,
+					UsedPercent:    usedPercent,
 					FreePercent:    freePercent,
 					StandbyPercent: standbyPercent,
-					LastTrimTime:   lastCleanTime,
-					TrimCount:      trimCountTotal,
+					LastTrimTime:   lastTrim,
+					TrimCount:      trimCnt,
 				}
 
 				if statsCallback != nil {
@@ -245,10 +305,13 @@ func StartContinuousMonitor(statsCallback func(MemoryStats)) {
 				}
 
 				// Should we trim?
-				if freePercent < FreeMemoryThresholdPercent &&
+				monitorMu.Lock()
+				shouldTrim := freePercent < FreeMemoryThresholdPercent &&
 					standbyPercent > StandbyThresholdPercent &&
-					time.Since(lastCleanTime) > MinCleanInterval {
+					time.Since(lastCleanTime) > MinCleanInterval
+				monitorMu.Unlock()
 
+				if shouldTrim {
 					log.Printf("[SysCleaner] RAM Monitor: Free=%.1f%%, Standby=%.1f%% - Trimming...",
 						freePercent, standbyPercent)
 
@@ -259,26 +322,39 @@ func StartContinuousMonitor(statsCallback func(MemoryStats)) {
 						log.Println("[SysCleaner] Low-priority standby trim completed")
 					}
 
+					monitorMu.Lock()
 					lastCleanTime = time.Now()
 					trimCountTotal++
+					monitorMu.Unlock()
 
-					// Check if that was enough after a brief wait (interruptible)
+					// Wait 5s for memory pressure to stabilize (interruptible)
 					select {
 					case <-monitorDone:
 						return
-					case <-time.After(2 * time.Second):
+					case <-time.After(5 * time.Second):
 					}
-					if vmem2, err := mem.VirtualMemory(); err == nil {
-						newFreePercent := (float64(vmem2.Available) / float64(vmem2.Total)) * 100
+
+					total2, avail2, statErr2 := getMemoryStatus()
+					if statErr2 != nil && vmem != nil {
+						total2 = vmem.Total
+						avail2 = vmem.Available
+					}
+					if statErr2 == nil || vmem != nil {
+						newFreePercent := (float64(avail2) / float64(total2)) * 100
 						if newFreePercent < FreeMemoryThresholdPercent {
-							// Aggressive trim
-							log.Println("[SysCleaner] Gentle trim insufficient, purging full standby list...")
+							// Flush modified pages to standby first, then purge standby
+							log.Println("[SysCleaner] Gentle trim insufficient, flushing modified list then purging standby...")
+							if err := FlushModifiedList(); err != nil {
+								log.Printf("[SysCleaner] FlushModifiedList warning: %v", err)
+							}
 							if err := PurgeStandbyList(); err != nil {
 								log.Printf("[SysCleaner] Full standby purge failed: %v", err)
 							} else {
 								log.Println("[SysCleaner] Full standby trim completed")
 							}
+							monitorMu.Lock()
 							trimCountTotal++
+							monitorMu.Unlock()
 						}
 					}
 				}
@@ -304,43 +380,66 @@ func TrimNow() error {
 	}
 
 	log.Println("[SysCleaner] Manual RAM trim requested...")
+	if err := FlushModifiedList(); err != nil {
+		log.Printf("[SysCleaner] FlushModifiedList warning: %v", err)
+	}
 	if err := PurgeStandbyList(); err != nil {
 		return fmt.Errorf("failed to purge standby list: %w", err)
 	}
 
+	monitorMu.Lock()
 	lastCleanTime = time.Now()
 	trimCountTotal++
+	monitorMu.Unlock()
+
 	log.Println("[SysCleaner] Manual RAM trim completed")
 	return nil
 }
 
 // GetCurrentStats returns current memory statistics.
 func GetCurrentStats() MemoryStats {
-	vmem, err := mem.VirtualMemory()
-	if err != nil {
+	total, avail, statErr := getMemoryStatus()
+	vmem, _ := mem.VirtualMemory()
+
+	if statErr != nil && vmem == nil {
 		return MemoryStats{}
 	}
+	if statErr != nil {
+		total = vmem.Total
+		avail = vmem.Available
+	}
 
-	totalGB := float64(vmem.Total) / 1024 / 1024 / 1024
-	usedGB := float64(vmem.Used) / 1024 / 1024 / 1024
-	freeGB := float64(vmem.Available) / 1024 / 1024 / 1024
-	standbyGB := freeGB - (float64(vmem.Free) / 1024 / 1024 / 1024)
-	if standbyGB < 0 {
-		standbyGB = 0
+	totalGB := float64(total) / 1024 / 1024 / 1024
+	freeGB := float64(avail) / 1024 / 1024 / 1024
+	usedGB := float64(0)
+	usedPercent := float64(0)
+	standbyGB := float64(0)
+	if vmem != nil {
+		usedGB = float64(vmem.Used) / 1024 / 1024 / 1024
+		usedPercent = vmem.UsedPercent
+		standbyGB = freeGB - (float64(vmem.Free) / 1024 / 1024 / 1024)
+		if standbyGB < 0 {
+			standbyGB = 0
+		}
 	}
 
 	freePercent := (freeGB / totalGB) * 100
 	standbyPercent := (standbyGB / totalGB) * 100
+
+	monitorMu.Lock()
+	lastTrim := lastCleanTime
+	trimCnt := trimCountTotal
+	monitorMu.Unlock()
 
 	return MemoryStats{
 		TotalGB:        totalGB,
 		UsedGB:         usedGB,
 		FreeGB:         freeGB,
 		StandbyGB:      standbyGB,
-		UsedPercent:    vmem.UsedPercent,
+		UsedPercent:    usedPercent,
 		FreePercent:    freePercent,
 		StandbyPercent: standbyPercent,
-		LastTrimTime:   lastCleanTime,
-		TrimCount:      trimCountTotal,
+		LastTrimTime:   lastTrim,
+		TrimCount:      trimCnt,
 	}
 }
