@@ -45,11 +45,14 @@ func NewDashboard() fyne.CanvasObject {
 
 	// Load system info
 	go func() {
-		if info, err := host.Info(); err == nil {
-			sysInfoLabel.SetText(fmt.Sprintf("OS: %s %s | Hostname: %s | Uptime: %s",
-				info.Platform, info.PlatformVersion, info.Hostname,
-				(time.Duration(info.Uptime) * time.Second).String()))
+		info, err := host.Info()
+		if err != nil {
+			sysInfoLabel.SetText("System info unavailable")
+			return
 		}
+		sysInfoLabel.SetText(fmt.Sprintf("OS: %s %s | Hostname: %s | Uptime: %s",
+			info.Platform, info.PlatformVersion, info.Hostname,
+			(time.Duration(info.Uptime)*time.Second).String()))
 	}()
 
 	// Real-time update goroutine with smooth animations
@@ -66,6 +69,8 @@ func NewDashboard() fyne.CanvasObject {
 				prevCPU = smoothCPU
 				cpuBar.SetValue(smoothCPU)
 				cpuLabel.SetText(fmt.Sprintf("CPU: %.1f%%", smoothCPU*100))
+			} else {
+				cpuLabel.SetText("CPU: \u2013 (unavailable)")
 			}
 
 			// RAM with smooth transition
@@ -78,6 +83,8 @@ func NewDashboard() fyne.CanvasObject {
 					smoothRAM*100,
 					float64(vmem.Used)/1024/1024/1024,
 					float64(vmem.Total)/1024/1024/1024))
+			} else {
+				ramLabel.SetText("RAM: \u2013 (unavailable)")
 			}
 
 			// Disk with smooth transition
@@ -90,6 +97,8 @@ func NewDashboard() fyne.CanvasObject {
 					smoothDisk*100,
 					float64(usage.Used)/1024/1024/1024,
 					float64(usage.Total)/1024/1024/1024))
+			} else {
+				diskLabel.SetText("Disk: \u2013 (unavailable)")
 			}
 
 			// Performance score with animation
