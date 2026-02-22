@@ -335,11 +335,16 @@ func StartContinuousMonitor(statsCallback func(MemoryStats)) {
 					}
 
 					total2, avail2, statErr2 := getMemoryStatus()
-					if statErr2 != nil && vmem != nil {
-						total2 = vmem.Total
-						avail2 = vmem.Available
+					if statErr2 != nil {
+						// Fresh fallback after wait â€” do not reuse the pre-wait vmem (5s stale)
+						vmem2, err2 := mem.VirtualMemory()
+						if err2 != nil {
+							continue
+						}
+						total2 = vmem2.Total
+						avail2 = vmem2.Available
 					}
-					if statErr2 == nil || vmem != nil {
+					{
 						newFreePercent := (float64(avail2) / float64(total2)) * 100
 						if newFreePercent < FreeMemoryThresholdPercent {
 							// Flush modified pages to standby first, then purge standby
