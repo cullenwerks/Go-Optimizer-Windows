@@ -205,54 +205,51 @@ func NewCleanPanel() fyne.CanvasObject {
 
 	buttonRow := container.NewGridWithColumns(2, analyzeBtn, cleanBtn)
 
-	// System section with select all/deselect all
+	// System accordion section
 	sysSelectAll := widget.NewButton("Select All", makeSelectAll(systemChecks, true))
 	sysDeselectAll := widget.NewButton("Deselect All", makeSelectAll(systemChecks, false))
-	systemHeader := container.NewHBox(
-		widget.NewLabelWithStyle("System", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		sysSelectAll, sysDeselectAll,
-	)
-	systemGrid := container.NewGridWithColumns(4,
-		winTempCheck, userTempCheck, prefetchCheck, crashDumpCheck,
-		errorReportsCheck, thumbCacheCheck, iconCacheCheck, shaderCacheCheck,
-		dnsCacheCheck, winLogsCheck, eventLogsCheck, deliveryOptCheck,
-		recycleBinCheck, winUpdateCheck, winInstallerCheck, fontCacheCheck,
+	systemContent := container.NewVBox(
+		container.NewHBox(sysSelectAll, sysDeselectAll),
+		container.NewGridWithColumns(4,
+			winTempCheck, userTempCheck, prefetchCheck, crashDumpCheck,
+			errorReportsCheck, thumbCacheCheck, iconCacheCheck, shaderCacheCheck,
+			dnsCacheCheck, winLogsCheck, eventLogsCheck, deliveryOptCheck,
+			recycleBinCheck, winUpdateCheck, winInstallerCheck, fontCacheCheck,
+		),
 	)
 
-	// Browser section
+	// Browser accordion section
 	browserSelectAll := widget.NewButton("Select All", makeSelectAll(browserChecks, true))
 	browserDeselectAll := widget.NewButton("Deselect All", makeSelectAll(browserChecks, false))
-	browserHeader := container.NewHBox(
-		widget.NewLabelWithStyle("Browsers", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		browserSelectAll, browserDeselectAll,
-	)
-	browserGrid := container.NewGridWithColumns(5,
-		chromeCheck, firefoxCheck, edgeCheck, braveCheck, operaCheck,
+	browserContent := container.NewVBox(
+		container.NewHBox(browserSelectAll, browserDeselectAll),
+		container.NewGridWithColumns(5,
+			chromeCheck, firefoxCheck, edgeCheck, braveCheck, operaCheck,
+		),
 	)
 
-	// Apps section
+	// Apps accordion section
 	appSelectAll := widget.NewButton("Select All", makeSelectAll(appChecks, true))
 	appDeselectAll := widget.NewButton("Deselect All", makeSelectAll(appChecks, false))
-	appHeader := container.NewHBox(
-		widget.NewLabelWithStyle("Applications", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		appSelectAll, appDeselectAll,
+	appContent := container.NewVBox(
+		container.NewHBox(appSelectAll, appDeselectAll),
+		container.NewGridWithColumns(3,
+			discordCheck, spotifyCheck, steamCheck,
+			teamsCheck, vscodeCheck, javaCheck,
+		),
 	)
-	appGrid := container.NewGridWithColumns(3,
-		discordCheck, spotifyCheck, steamCheck,
-		teamsCheck, vscodeCheck, javaCheck,
+
+	accordion := widget.NewAccordion(
+		widget.NewAccordionItem("System (16)", systemContent),
+		widget.NewAccordionItem("Browsers (5)", browserContent),
+		widget.NewAccordionItem("Apps (6)", appContent),
 	)
+	// All sections collapsed by default — user opens what they need.
 
 	content := container.NewVBox(
 		widget.NewLabelWithStyle("System Cleaning", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewSeparator(),
-		systemHeader,
-		systemGrid,
-		widget.NewSeparator(),
-		browserHeader,
-		browserGrid,
-		widget.NewSeparator(),
-		appHeader,
-		appGrid,
+		accordion,
 		widget.NewSeparator(),
 		buttonRow,
 		widget.NewSeparator(),
