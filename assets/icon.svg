@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="flameGrad" x1="0.5" y1="1" x2="0.5" y2="0">
+      <stop offset="0%" stop-color="#FF5500"/>
+      <stop offset="100%" stop-color="#DC1E1E"/>
+    </linearGradient>
+    <!-- Clip the flame to stay above gear center -->
+    <clipPath id="flameClip">
+      <rect x="60" y="0" width="136" height="148"/>
+    </clipPath>
+  </defs>
+
+  <!--
+    8-tooth gear centered at (128, 148).
+    Each of the 8 sectors = 45° = π/4 rad.
+    Tooth profile per sector (angles from top, CW):
+      root-left  @ (i*45 - 11)°, r = 78
+      tip-left   @ (i*45 -  7)°, r = 100
+      tip-right  @ (i*45 +  7)°, r = 100
+      root-right @ (i*45 + 11)°, r = 78
+    Arc on root circle (r=78) between sectors.
+
+    Pre-computed coords (cx=0, cy=0), then translated to (128,148):
+    Angles start at -90° (top) and go CW.
+
+    Sector 0 center = -90° = 270°
+      root-L  @ 259°: r78 → (-76.5, -14.9)
+      tip-L   @ 263°: r100 → (-99.3, -12.2)  [approx: cos263=-0.122, sin263=-0.993]
+      tip-R   @ 277°: r100 → (12.2, -99.3)   [approx: cos277=0.122, sin277=-0.993]
+      root-R  @ 281°: r78  → (14.9, -76.5)
+
+    It's easier to just use a proper precomputed polygon.
+    Using 8 teeth, computed precisely:
+  -->
+
+  <!-- Gear body: union of outer teeth polygon + inner disk -->
+  <!-- Using a pre-computed 32-point polygon for an 8-tooth gear -->
+  <!-- cx=128, cy=148, outer r=100 (tips), inner r=76 (roots), tooth half-width ~10° -->
+  <polygon transform="translate(128,148)" fill="#1A1A1A" points="
+    0,-100
+    17.4,-98.5
+    29.0,-73.4
+    57.4,-56.6
+    70.7,-70.7
+    84.7,-56.6
+    56.6,-29.0
+    56.6,29.0
+    70.7,70.7
+    56.6,84.7
+    29.0,56.6
+    -29.0,56.6
+    -56.6,84.7
+    -70.7,70.7
+    -56.6,29.0
+    -56.6,-29.0
+    -84.7,-56.6
+    -70.7,-70.7
+    -57.4,-56.6
+    -29.0,-73.4
+    -17.4,-98.5
+    0,-100
+  "/>
+
+  <!--
+    Better approach: use a clean gear shape built with bezier curves.
+    8 teeth, each 45° sector, with proper tooth profile.
+    Tooth tip at r=100, root at r=74, tooth width ~16°, root gap ~29°.
+
+    Angles (degrees, CW from top=0°):
+      Each tooth:  tip spans [sector*45 - 8, sector*45 + 8], root at r=74
+      Root arcs:   spans [sector*45 + 8, (sector+1)*45 - 8] at r=74
+
+    Pre-computed for all 8 teeth:
+    (all coords relative to gear center, then add 128,148)
+
+    Using SVG arc for root sections and lines for teeth flanks.
+  -->
+
+  <!-- Clean gear using arc+line approach -->
+  <path transform="translate(128,148)" fill="#1A1A1A" d="
+    M -13.9,-99.0
+    L -13.9,-99.0
+    A 100,100 0 0,1 13.9,-99.0
+    L 28.5,-70.9
+    A 74,74 0 0,1 52.3,-52.3
+    L 70.9,-28.5
+    A 100,100 0 0,1 99.0,-13.9
+    L 99.0,13.9
+    A 100,100 0 0,1 70.9,28.5
+    L 52.3,52.3
+    A 74,74 0 0,1 28.5,70.9
+    L 13.9,99.0
+    A 100,100 0 0,1 -13.9,99.0
+    L -28.5,70.9
+    A 74,74 0 0,1 -52.3,52.3
+    L -70.9,28.5
+    A 100,100 0 0,1 -99.0,13.9
+    L -99.0,-13.9
+    A 100,100 0 0,1 -70.9,-28.5
+    L -52.3,-52.3
+    A 74,74 0 0,1 -28.5,-70.9
+    Z
+  "/>
+
+  <!-- Lighter inner ring for depth -->
+  <circle cx="128" cy="148" r="58" fill="#2A2A2A"/>
+
+  <!-- Center bore -->
+  <circle cx="128" cy="148" r="34" fill="#111111"/>
+
+  <!-- Circuit accent on top: horizontal trace across top tooth with pads -->
+  <line x1="96" y1="42" x2="160" y2="42" stroke="#FF5500" stroke-width="2" stroke-linecap="round"/>
+  <rect x="90" y="36" width="12" height="12" rx="2" fill="#FF5500"/>
+  <rect x="154" y="36" width="12" height="12" rx="2" fill="#FF5500"/>
+
+  <!-- Flame: 3-lobe, clipped above gear center -->
+  <!-- Center lobe (tallest) -->
+  <path clip-path="url(#flameClip)" d="
+    M 116,148
+    C 108,126 112,104 120,86
+    C 124,74 122,60 128,48
+    C 134,60 132,74 136,86
+    C 144,104 148,126 140,148
+    Z
+  " fill="url(#flameGrad)"/>
+
+  <!-- Left lobe -->
+  <path clip-path="url(#flameClip)" d="
+    M 112,148
+    C 103,130 106,110 113,96
+    C 116,88 113,76 119,68
+    C 124,76 122,90 126,102
+    C 129,116 126,132 120,148
+    Z
+  " fill="url(#flameGrad)" opacity="0.78"/>
+
+  <!-- Right lobe -->
+  <path clip-path="url(#flameClip)" d="
+    M 144,148
+    C 153,130 150,110 143,96
+    C 140,88 143,76 137,68
+    C 132,76 134,90 130,102
+    C 127,116 130,132 136,148
+    Z
+  " fill="url(#flameGrad)" opacity="0.78"/>
+</svg>
