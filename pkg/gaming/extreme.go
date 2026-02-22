@@ -316,7 +316,7 @@ func EnableExtremeMode(progress func(string)) error {
 
 	// Set ultimate performance power plan
 	report("Applying power plan...")
-	if err := setPowerSchemeNative("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"); err != nil {
+	if err := setPowerSchemeNative(powerSchemeHighPerformance); err != nil {
 		log.Printf("[SysCleaner] Failed to set ultimate performance power plan: %v", err)
 	}
 

@@ -41,6 +41,13 @@ type GameProcess struct {
 	RAMUsage uint64
 }
 
+const (
+	// powerSchemeHighPerformance is the Windows "High Performance" power plan GUID.
+	powerSchemeHighPerformance = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+	// powerSchemeBalanced is the Windows "Balanced" power plan GUID.
+	powerSchemeBalanced = "381b4222-f694-41f0-9685-ff5bb260df2e"
+)
+
 var (
 	gamingModeEnabled bool
 	stoppedServices   []string
@@ -93,7 +100,7 @@ func Enable(config Config) error {
 
 		// Set high performance power plan
 		log.Println("[SysCleaner] Setting high performance power plan...")
-		if err := setPowerSchemeNative("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"); err != nil {
+		if err := setPowerSchemeNative(powerSchemeHighPerformance); err != nil {
 			log.Printf("[SysCleaner] Failed to set high performance power plan: %v", err)
 		}
 
@@ -141,7 +148,7 @@ func Disable() error {
 
 		// Restore balanced power plan
 		log.Println("[SysCleaner] Restoring balanced power plan...")
-		if err := setPowerSchemeNative("381b4222-f694-41f0-9685-ff5bb260df2e"); err != nil {
+		if err := setPowerSchemeNative(powerSchemeBalanced); err != nil {
 			log.Printf("[SysCleaner] Failed to restore balanced power plan: %v", err)
 		}
 	}
