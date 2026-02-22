@@ -335,7 +335,7 @@ func CloseBackgroundApps(whitelist []string) (int, []string) {
 }
 
 func stopWindowsExplorer() error {
-	return terminateProcessByName("explorer.exe")
+	return stopWindowsExplorerNative()
 }
 
 func startWindowsExplorer() error {
