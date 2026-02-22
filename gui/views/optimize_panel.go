@@ -25,6 +25,13 @@ func NewOptimizePanel() fyne.CanvasObject {
 
 	statusLabel := widget.NewLabel("Ready.")
 
+	// Per-step status labels (shown during Run All)
+	stepStartup := widget.NewLabel("")
+	stepNetwork := widget.NewLabel("")
+	stepDisk := widget.NewLabel("")
+	stepsBox := container.NewVBox(stepStartup, stepNetwork, stepDisk)
+	stepsBox.Hide()
+
 	// Startup optimization
 	startupBtn := widget.NewButton("Optimize Startup Programs", nil)
 	networkBtn := widget.NewButton("Optimize Network", nil)
@@ -129,19 +136,28 @@ func NewOptimizePanel() fyne.CanvasObject {
 		progressBar.Show()
 		progressBar.Start()
 		statusLabel.SetText("Running all optimizations...")
+		stepStartup.SetText("Optimizing startup programs...")
+		stepNetwork.SetText("Optimizing network settings...")
+		stepDisk.SetText("Optimizing disk settings...")
+		stepsBox.Show()
 
 		go func() {
-			defer enableAll()
+			defer func() {
+				enableAll()
+				stepsBox.Hide()
+			}()
 			text := ""
 
 			// Startup
 			startupResult := optimizer.OptimizeStartup()
 			text += fmt.Sprintf("Startup: %d programs disabled\n", startupResult.Disabled)
+			stepStartup.SetText("✓ Startup programs")
 
 			// Network
 			netResult := optimizer.OptimizeNetwork()
 			text += fmt.Sprintf("Network: %dms latency reduction, %d optimizations\n",
 				netResult.LatencyReduction, len(netResult.Optimizations))
+			stepNetwork.SetText("✓ Network settings")
 
 			// Disk
 			diskResult := optimizer.OptimizeDisk()
@@ -150,6 +166,7 @@ func NewOptimizePanel() fyne.CanvasObject {
 				diskType = "SSD"
 			}
 			text += fmt.Sprintf("Disk: %s optimized\n", diskType)
+			stepDisk.SetText("✓ Disk settings")
 
 			progressBar.Stop()
 			progressBar.Hide()
@@ -174,6 +191,7 @@ func NewOptimizePanel() fyne.CanvasObject {
 		allBtn,
 		widget.NewSeparator(),
 		statusLabel,
+		stepsBox,
 		progressBar,
 		resultText,
 	)

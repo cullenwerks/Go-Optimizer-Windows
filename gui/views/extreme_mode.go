@@ -109,10 +109,8 @@ func (p *extremeModePanel) toggleExtremeMode() {
 		"Activate Extreme Performance Mode?",
 		"This will:\n\n"+
 			"  - Stop Windows Explorer (no desktop/taskbar)\n"+
-			"  - Stop all non-essential services\n"+
-			"  - Close background apps (respecting whitelist)\n"+
-			"  - Maximize game performance\n\n"+
-			"You can only launch games from this window.\nContinue?",
+			"  - Stop non-essential services\n"+
+			"  - Close background apps (respecting whitelist)",
 		func(confirmed bool) {
 			if confirmed {
 				p.toggleBtn.Disable()
