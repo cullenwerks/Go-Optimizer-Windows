@@ -217,9 +217,8 @@ func EnableExtremeMode() error {
 		startService(svc)
 	}
 
-	// Stop Windows Explorer (Desktop Experience)
-	// Uses taskkill for explorer.exe — native API is inappropriate for shell
-	// processes that auto-restart via Windows Session Manager
+	// Stop Windows Explorer (Desktop Experience) via WM_CLOSE to Shell_TrayWnd.
+	// This is a clean shutdown that does not trigger Session Manager auto-restart.
 	log.Println("[SysCleaner] Stopping Windows Explorer shell...")
 	if err := stopWindowsExplorer(); err != nil {
 		return fmt.Errorf("failed to stop explorer: %w", err)
