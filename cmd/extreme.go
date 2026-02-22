@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"syscleaner/pkg/gaming"
 
@@ -62,6 +63,35 @@ WARNING: This mode removes the desktop shell. Use the GUI launcher to start game
 	},
 }
 
+var extremeWorkerCmd = &cobra.Command{
+	Use:    "--extreme-worker",
+	Hidden: true,
+	Args:   cobra.ExactArgs(1), // "enable" or "disable"
+	Run: func(cmd *cobra.Command, args []string) {
+		action := args[0]
+		progress := func(msg string) {
+			fmt.Println(msg)
+		}
+		switch action {
+		case "enable":
+			if err := gaming.EnableExtremeMode(progress); err != nil {
+				fmt.Fprintln(os.Stderr, "ERROR:", err)
+				os.Exit(1)
+			}
+			fmt.Println("DONE")
+		case "disable":
+			if err := gaming.DisableExtremeMode(progress); err != nil {
+				fmt.Fprintln(os.Stderr, "ERROR:", err)
+				os.Exit(1)
+			}
+			fmt.Println("DONE")
+		default:
+			fmt.Fprintln(os.Stderr, "unknown action:", action)
+			os.Exit(1)
+		}
+	},
+}
+
 func printExtremeStatus() {
 	fmt.Println("--- Extreme Performance Mode Status ---")
 	fmt.Println()
@@ -89,4 +119,5 @@ func init() {
 	extremeCmd.Flags().Bool("disable", false, "Disable extreme performance mode")
 	extremeCmd.Flags().Bool("status", false, "Show extreme mode status")
 	rootCmd.AddCommand(extremeCmd)
+	rootCmd.AddCommand(extremeWorkerCmd)
 }
