@@ -31,6 +31,14 @@ function Build-SysCleaner {
         $exeName = "SysCleaner-$archSuffix.exe"
     }
 
+    # Optional: generate icon.ico from SVG using ImageMagick (if installed and ICO not yet present)
+    if ($WithIcon -and (Test-Path "assets/icon.svg") -and -not (Test-Path "assets/icon.ico")) {
+        if (Get-Command magick -ErrorAction SilentlyContinue) {
+            Write-Host "  Converting SVG to ICO via ImageMagick..." -ForegroundColor Yellow
+            magick assets/icon.svg -define icon:auto-resize=256,48,32,16 assets/icon.ico
+        }
+    }
+
     # Compile icon resource for this architecture
     if ($WithIcon -and (Test-Path "assets/icon.ico")) {
         Write-Host "  Compiling icon resource ($TargetArch)..." -ForegroundColor Yellow

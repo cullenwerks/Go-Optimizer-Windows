@@ -69,6 +69,14 @@ jobs:
           LLVM_BIN=$(ls -d C:/llvm-mingw/llvm-mingw-*/bin 2>/dev/null | head -1)
           echo "$LLVM_BIN" >> "$GITHUB_PATH"
 
+      - name: Generate icon.ico from SVG
+        if: hashFiles('assets/icon.svg') != ''
+        shell: bash
+        run: |
+          magick assets/icon.svg \
+            -define icon:auto-resize=256,48,32,16 \
+            assets/icon.ico
+
       - name: Install rsrc (icon embedding)
         shell: bash
         run: go install github.com/akavel/rsrc@latest
