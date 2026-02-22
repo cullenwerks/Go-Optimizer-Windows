@@ -61,9 +61,13 @@ func NewPriorityPanel(w fyne.Window) fyne.CanvasObject {
 	table.SetColumnWidth(2, 150)
 	table.SetColumnWidth(3, 150)
 
-	// Header
-	header := widget.NewLabel("Process Name            CPU Priority       I/O Priority       Page Priority")
-	header.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
+	// Header — 4 columns matching the table column widths
+	header := container.NewGridWithColumns(4,
+		widget.NewLabelWithStyle("Process Name", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("CPU Priority", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("I/O Priority", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Page Priority", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+	)
 
 	// Selected row for removal
 	var selectedRow = -1
@@ -107,7 +111,10 @@ func NewPriorityPanel(w fyne.Window) fyne.CanvasObject {
 	})
 
 	configuredSection := container.NewBorder(
-		widget.NewLabelWithStyle("Configured Process Priorities", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewVBox(
+			widget.NewLabelWithStyle("Configured Process Priorities", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			header,
+		),
 		removeBtn,
 		nil, nil,
 		container.NewScroll(table),
@@ -147,7 +154,8 @@ func NewPriorityPanel(w fyne.Window) fyne.CanvasObject {
 		}, w)
 	})
 
-	applyBtn := widget.NewButton("Apply Priority", func() {
+	var applyBtn *widget.Button
+	applyBtn = widget.NewButton("Apply Priority", func() {
 		processName := strings.TrimSpace(processNameEntry.Text)
 		if processName == "" {
 			dialog.ShowError(fmt.Errorf("process name cannot be empty"), w)
@@ -158,19 +166,24 @@ func NewPriorityPanel(w fyne.Window) fyne.CanvasObject {
 		ioPriorityName := ioSelect.Selected
 		pagePriorityName := pageSelect.Selected
 
-		cpuVal := priority.ParseCpuPriorityName(cpuPriorityName)
-		ioVal := priority.ParseIoPriorityName(ioPriorityName)
-		pageVal := priority.ParsePagePriorityName(pagePriorityName)
+		applyBtn.Disable()
+		go func() {
+			defer applyBtn.Enable()
 
-		if err := priority.SetProcessPriority(processName, cpuVal, ioVal, pageVal); err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
+			cpuVal := priority.ParseCpuPriorityName(cpuPriorityName)
+			ioVal := priority.ParseIoPriorityName(ioPriorityName)
+			pageVal := priority.ParsePagePriorityName(pagePriorityName)
 
-		dialog.ShowInformation("Success",
-			fmt.Sprintf("Priority settings applied to %s\nChanges take effect next time the process starts", processName), w)
-		refreshTable()
-		processNameEntry.SetText("")
+			if err := priority.SetProcessPriority(processName, cpuVal, ioVal, pageVal); err != nil {
+				dialog.ShowError(err, w)
+				return
+			}
+
+			dialog.ShowInformation("Success",
+				fmt.Sprintf("Priority settings applied to %s\nChanges take effect next time the process starts", processName), w)
+			refreshTable()
+			processNameEntry.SetText("")
+		}()
 	})
 
 	addForm := container.NewVBox(
