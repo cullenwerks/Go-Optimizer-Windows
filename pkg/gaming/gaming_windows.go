@@ -56,9 +56,16 @@ func setTCPGamingParams() error {
 	return nil
 }
 
-// startExplorerNative launches explorer.exe detached from our process
-// so no CMD window appears and it doesn't inherit our console.
+// startExplorerNative re-enables the Session Manager auto-restart of explorer,
+// then launches explorer.exe detached from our process so no CMD window appears.
 func startExplorerNative() error {
+	// Re-enable Session Manager auto-restart before launching explorer.
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, explorerAutoRestartKey, registry.SET_VALUE)
+	if err == nil {
+		_ = key.SetDWordValue("AutoRestartShell", 1)
+		key.Close()
+	}
+
 	exePath, err := windows.UTF16PtrFromString(`C:\Windows\explorer.exe`)
 	if err != nil {
 		return err

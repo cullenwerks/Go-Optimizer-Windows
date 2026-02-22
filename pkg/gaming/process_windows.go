@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -67,40 +68,45 @@ func terminateProcessByName(name string) error {
 	return nil
 }
 
-// stopWindowsExplorerNative sends WM_CLOSE to the Shell_TrayWnd (taskbar window),
-// which causes explorer.exe to shut down cleanly. Unlike TerminateProcess, a clean
-// shutdown does NOT trigger the Session Manager to auto-restart explorer.
-// Polls up to 5 seconds for confirmation, then falls back to TerminateProcess.
+const explorerAutoRestartKey = `SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`
+
+// stopWindowsExplorerNative disables the Session Manager auto-restart of explorer.exe,
+// then terminates it via TerminateProcess. Setting AutoRestartShell=0 prevents
+// smss.exe from relaunching explorer after a forced kill, which is the only
+// reliable method on Windows 11 (WM_CLOSE to Shell_TrayWnd opens the shutdown
+// dialog on Windows 11 rather than cleanly exiting the shell).
 func stopWindowsExplorerNative() error {
-	className, _ := windows.UTF16PtrFromString("Shell_TrayWnd")
+	// Disable Session Manager auto-restart so TerminateProcess won't trigger a relaunch.
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, explorerAutoRestartKey, registry.SET_VALUE)
+	if err != nil {
+		return fmt.Errorf("failed to open Winlogon key: %w", err)
+	}
+	if err := key.SetDWordValue("AutoRestartShell", 0); err != nil {
+		key.Close()
+		return fmt.Errorf("failed to set AutoRestartShell=0: %w", err)
+	}
+	key.Close()
 
-	hwnd, _, _ := procFindWindowW.Call(
-		uintptr(unsafe.Pointer(className)),
-		0,
-	)
-
-	if hwnd == 0 {
-		// Explorer is not running — nothing to stop
-		return nil
+	// Now terminate explorer.exe.
+	if err := terminateProcessByName("explorer.exe"); err != nil {
+		// Restore auto-restart before returning the error.
+		if k, e := registry.OpenKey(registry.LOCAL_MACHINE, explorerAutoRestartKey, registry.SET_VALUE); e == nil {
+			_ = k.SetDWordValue("AutoRestartShell", 1)
+			k.Close()
+		}
+		return fmt.Errorf("failed to terminate explorer.exe: %w", err)
 	}
 
-	// Post WM_CLOSE to the shell window (graceful shutdown)
-	procPostMessageW.Call(hwnd, wmClose, 0, 0)
-
-	// Poll until explorer is gone (up to 5 seconds)
+	// Poll until explorer is fully gone (up to 5 seconds).
+	className, _ := windows.UTF16PtrFromString("Shell_TrayWnd")
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(200 * time.Millisecond)
-		check, _, _ := procFindWindowW.Call(
-			uintptr(unsafe.Pointer(className)),
-			0,
-		)
+		check, _, _ := procFindWindowW.Call(uintptr(unsafe.Pointer(className)), 0)
 		if check == 0 {
-			return nil // Shell_TrayWnd gone — explorer stopped
+			return nil // Shell is gone
 		}
 	}
-
-	// Fallback: force-terminate if WM_CLOSE didn't work
-	log.Println("[SysCleaner] WM_CLOSE timeout, falling back to TerminateProcess for explorer.exe")
-	return terminateProcessByName("explorer.exe")
+	log.Println("[SysCleaner] Explorer process terminated but Shell_TrayWnd still present; proceeding anyway")
+	return nil
 }
