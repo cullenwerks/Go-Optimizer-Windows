@@ -353,6 +353,10 @@ func DisableExtremeMode(progress func(string)) error {
 	if !extremeModeActive {
 		return fmt.Errorf("extreme mode not active")
 	}
+	defer func() {
+		extremeModeActive = false
+		deleteSentinel()
+	}()
 
 	// Stop RAM monitoring
 	if extremeMode.ramMonitorActive {
@@ -381,9 +385,6 @@ func DisableExtremeMode(progress func(string)) error {
 	// Re-enable visual effects
 	report("Restoring visual settings...")
 	enableVisualEffects()
-
-	extremeModeActive = false
-	deleteSentinel()
 
 	// Disable regular gaming mode
 	mu.Unlock()
