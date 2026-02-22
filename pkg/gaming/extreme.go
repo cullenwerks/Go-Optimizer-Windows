@@ -351,7 +351,18 @@ func DisableExtremeMode(progress func(string)) error {
 	defer mu.Unlock()
 
 	if !extremeModeActive {
-		return fmt.Errorf("extreme mode not active")
+		// When running as a disable worker subprocess, the in-process flag is
+		// always false because activation happened in a different child process.
+		// Fall back to the sentinel file to confirm extreme mode is actually active.
+		if !sentinelExists() {
+			return fmt.Errorf("extreme mode not active")
+		}
+		// Sentinel exists: restore state so teardown proceeds correctly.
+		extremeModeActive = true
+		extremeMode.ShellStopped = true
+		extremeMode.AntiCheatServices = antiCheatServices
+		// Ensure gaming mode is considered enabled so Disable() won't error.
+		gamingModeEnabled = true
 	}
 	defer func() {
 		extremeModeActive = false
