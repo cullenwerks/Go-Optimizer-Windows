@@ -73,6 +73,7 @@ var (
 		"RemoteRegistry", // Remote Registry
 		"TermService",    // Remote Desktop Services
 		"SessionEnv",     // Remote Desktop Configuration
+		"RemoteAccess",   // Routing and Remote Access
 
 		// === Biometrics & Security (non-essential) ===
 		"WbioSrvc",  // Windows Biometric Service
@@ -118,9 +119,6 @@ var (
 		"WpnUserService",       // Windows Push Notifications User Service
 		"BcastDVRUserService",  // GameDVR and Broadcast User Service (if not recording)
 
-		// === Remote Access ===
-		"RemoteAccess", // Routing and Remote Access
-
 		// === Offline / Sync ===
 		"CscService", // Offline Files
 
@@ -128,9 +126,6 @@ var (
 		"ClipSVC",        // Client License Service (Store app DRM)
 		"InstallService", // Microsoft Store Install Service
 		"EntAppSvc",      // Enterprise App Management
-
-		// === Web Account / Identity ===
-		"TokenBroker", // Web Account Manager (Microsoft account sync)
 
 		// === Windows Hello / Biometrics (additional) ===
 		"NgcCtnrSvc", // Windows Hello PIN Container
@@ -207,12 +202,11 @@ var (
 		// === Gaming-adjacent apps ===
 		"EpicWebHelper.exe",
 		"XboxApp.exe",
-		"GamingServices.exe",
 		"Parsec.exe",
 		"TwitchUI.exe",
 		"Playnite.exe",
 		"obs64.exe",
-		"NahimicService.exe",
+		"NahimicService.exe", // OEM audio DSP (MSI/ASUS) — kills surround/mic effects on gaming laptops
 		"MSIAfterburner.exe",
 		"WallpaperEngine.exe",
 		"Wallpaper32.exe",
