@@ -53,14 +53,13 @@ func RunExtremeModeWorker(action string, progress func(string)) error {
 	var pi windows.ProcessInformation
 
 	// CREATE_NO_WINDOW prevents a console window from flashing.
-	const createNoWindow = 0x08000000
 	err = windows.CreateProcess(
 		nil,
 		cmdLinePtr,
 		nil,
 		nil,
 		true, // inherit handles so child gets writePipe as stdout
-		createNoWindow,
+		windows.CREATE_NO_WINDOW,
 		nil,
 		nil,
 		&si,

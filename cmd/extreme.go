@@ -17,6 +17,7 @@ for maximum gaming performance. Anti-cheat services are preserved.
 
 WARNING: This mode removes the desktop shell. Use the GUI launcher to start games.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// All flags below are registered in init(), so GetBool errors are impossible.
 		enable, _ := cmd.Flags().GetBool("enable")
 		disable, _ := cmd.Flags().GetBool("disable")
 		showStatus, _ := cmd.Flags().GetBool("status")

@@ -1,6 +1,10 @@
 package priority
 
 // PriorityEntry represents a configured process priority
+//
+// CpuPriority uses Windows PRIORITY_CLASS ordinal values: 1 (Idle), 2 (Normal),
+// 3 (High), 5 (Below Normal), 6 (Above Normal). Value 4 is intentionally absent —
+// Windows skips it; no PRIORITY_CLASS constant maps to 4.
 type PriorityEntry struct {
 	ProcessName      string // e.g., "LeagueClient.exe"
 	CpuPriority      int    // 1-6 (no 4)

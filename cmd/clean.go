@@ -15,6 +15,7 @@ var cleanCmd = &cobra.Command{
 
 You can select specific categories or use group flags like --all, --system, --browsers, --apps.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// All flags below are registered in init(), so GetBool errors are impossible.
 		all, _ := cmd.Flags().GetBool("all")
 		systemGroup, _ := cmd.Flags().GetBool("system")
 		browsersGroup, _ := cmd.Flags().GetBool("browsers")

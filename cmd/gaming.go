@@ -14,6 +14,7 @@ var gamingCmd = &cobra.Command{
 	Short: "Gaming mode - optimize system for gaming performance",
 	Long:  `Enable gaming mode to stop background services, boost game process priority, and optimize network settings.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// All flags below are registered in init(), so GetBool/GetInt errors are impossible.
 		enable, _ := cmd.Flags().GetBool("enable")
 		disable, _ := cmd.Flags().GetBool("disable")
 		showStatus, _ := cmd.Flags().GetBool("status")

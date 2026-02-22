@@ -13,6 +13,7 @@ var optimizeCmd = &cobra.Command{
 	Short: "Optimize system performance",
 	Long:  `Optimize startup programs, network settings, and disk performance.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// All flags below are registered in init(), so GetBool errors are impossible.
 		all, _ := cmd.Flags().GetBool("all")
 		startup, _ := cmd.Flags().GetBool("startup")
 		network, _ := cmd.Flags().GetBool("network")
