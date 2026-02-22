@@ -157,11 +157,13 @@ jobs:
             PRERELEASE="--prerelease"
           fi
 
-          # Create (or update if already exists) the release, then upload assets.
+          # Create the release (creating the git tag too if it doesn't exist yet),
+          # then fall back to upload-only if the release already exists.
           gh release create "$TAG" \
             --repo "$REPO" \
             --title "$NAME" \
             --generate-notes \
+            --create-tag \
             $PRERELEASE \
             artifacts/SysCleaner-x64/SysCleaner-x64.exe \
             artifacts/SysCleaner-arm64/SysCleaner-arm64.exe \
