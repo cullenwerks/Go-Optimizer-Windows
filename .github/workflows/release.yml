@@ -1,0 +1,132 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string (e.g. 2.1.0)'
+        required: false
+        default: 'dev'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows (${{ matrix.arch }})
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            suffix: x64
+            cc: x86_64-w64-mingw32-gcc
+            cross: false
+
+          - arch: arm64
+            suffix: arm64
+            cc: aarch64-w64-mingw32-clang
+            cross: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${{ github.event.inputs.version }}" && "${{ github.event.inputs.version }}" != "dev" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install llvm-mingw (ARM64 cross-compiler)
+        if: matrix.cross
+        shell: bash
+        run: |
+          # llvm-mingw provides aarch64-w64-mingw32-clang needed for CGO cross-compile to Windows ARM64
+          LLVM_VER="20250114"
+          ARCHIVE="llvm-mingw-${LLVM_VER}-ucrt-x86_64.zip"
+          curl -fsSL -o "$ARCHIVE" \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_VER}/${ARCHIVE}"
+          7z x "$ARCHIVE" -o"C:/llvm-mingw" -y > /dev/null
+          # The zip contains a single subdirectory; add its bin to PATH
+          LLVM_BIN=$(ls -d C:/llvm-mingw/llvm-mingw-*/bin 2>/dev/null | head -1)
+          echo "$LLVM_BIN" >> "$GITHUB_PATH"
+
+      - name: Install rsrc (icon embedding)
+        shell: bash
+        run: go install github.com/akavel/rsrc@latest
+
+      - name: Embed icon resource
+        if: hashFiles('assets/icon.ico') != ''
+        shell: bash
+        run: |
+          rsrc -ico assets/icon.ico -arch ${{ matrix.arch }} -o rsrc_windows_${{ matrix.arch }}.syso
+
+      - name: Build ${{ matrix.suffix }}
+        shell: bash
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "1"
+          CC: ${{ matrix.cc }}
+        run: |
+          go build \
+            -tags gui \
+            -ldflags="-s -w -H=windowsgui" \
+            -trimpath \
+            -o "SysCleaner-${{ matrix.suffix }}.exe" \
+            .
+
+      - name: Clean up .syso
+        if: always()
+        shell: bash
+        run: rm -f rsrc_windows_*.syso
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SysCleaner-${{ matrix.suffix }}
+          path: SysCleaner-${{ matrix.suffix }}.exe
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only publish a release on tag pushes, not manual dispatches
+    if: github.ref_type == 'tag'
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SysCleaner ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            artifacts/SysCleaner-x64/SysCleaner-x64.exe
+            artifacts/SysCleaner-arm64/SysCleaner-arm64.exe
